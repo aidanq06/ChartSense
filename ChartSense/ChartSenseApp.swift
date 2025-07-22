@@ -12,7 +12,9 @@ import SwiftData
 struct ChartSenseApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Stock.self,
+            WatchlistItem.self,
+            SearchHistory.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,8 +27,126 @@ struct ChartSenseApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainAppView()
+                .modelContainer(sharedModelContainer)
+                .onAppear {
+                    setupAppearance()
+                }
         }
-        .modelContainer(sharedModelContainer)
+    }
+    
+    private func setupAppearance() {
+        // Customize tab bar appearance
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.systemBackground
+        
+        // Set tab bar item colors
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor.systemGray
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.systemGray]
+        
+        appearance.stackedLayoutAppearance.selected.iconColor = UIColor.systemBlue
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor.systemBlue]
+        
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+        
+        // Customize navigation bar appearance
+        let navAppearance = UINavigationBarAppearance()
+        navAppearance.configureWithOpaqueBackground()
+        navAppearance.backgroundColor = UIColor.systemBackground
+        navAppearance.titleTextAttributes = [.foregroundColor: UIColor.label]
+        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.label]
+        
+        UINavigationBar.appearance().standardAppearance = navAppearance
+        UINavigationBar.appearance().compactAppearance = navAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
+    }
+}
+
+// MARK: - App Delegate for additional setup
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        
+        // Setup notifications
+        setupNotifications()
+        
+        // Setup background refresh
+        setupBackgroundRefresh()
+        
+        return true
+    }
+    
+    private func setupNotifications() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if granted {
+                print("Notification permission granted")
+            } else if let error = error {
+                print("Notification permission error: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    private func setupBackgroundRefresh() {
+        // Note: In a real app, you would use BackgroundTasks framework
+        // For now, we'll just log that this would be implemented
+        print("Background refresh setup would be implemented with BackgroundTasks framework")
+    }
+}
+
+// MARK: - App State Management
+class AppStateManager: ObservableObject {
+    @Published var isFirstLaunch: Bool
+    @Published var currentVersion: String
+    @Published var previousVersion: String?
+    
+    init() {
+        let userDefaults = UserDefaults.standard
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let previousVersion = userDefaults.string(forKey: "AppVersion")
+        
+        self.currentVersion = currentVersion
+        self.previousVersion = previousVersion
+        self.isFirstLaunch = previousVersion == nil
+        
+        // Update stored version
+        userDefaults.set(currentVersion, forKey: "AppVersion")
+        
+        if isFirstLaunch {
+            performFirstLaunchSetup()
+        } else if let previousVersion = previousVersion, previousVersion != currentVersion {
+            performVersionMigration(from: previousVersion, to: currentVersion)
+        }
+    }
+    
+    private func performFirstLaunchSetup() {
+        print("First launch detected - performing setup")
+        
+        // Set default preferences
+        let userDefaults = UserDefaults.standard
+        userDefaults.set(true, forKey: "notificationsEnabled")
+        userDefaults.set(true, forKey: "priceAlertsEnabled")
+        userDefaults.set(false, forKey: "newsAlertsEnabled")
+        userDefaults.set(true, forKey: "marketOpenAlerts")
+        userDefaults.set("5 minutes", forKey: "refreshInterval")
+        userDefaults.set("Search", forKey: "defaultView")
+        
+        // Show onboarding or welcome screen
+        // This could be implemented as a separate view
+    }
+    
+    private func performVersionMigration(from oldVersion: String, to newVersion: String) {
+        print("Migrating from version \(oldVersion) to \(newVersion)")
+        
+        // Perform any necessary data migrations
+        // This is where you'd handle breaking changes between versions
+    }
+}
+
+// MARK: - Memory Management
+extension ChartSenseApp {
+    func applicationDidReceiveMemoryWarning() {
+        // Handle memory warnings
+        NotificationCenter.default.post(name: NSNotification.Name("MemoryWarning"), object: nil)
     }
 }
