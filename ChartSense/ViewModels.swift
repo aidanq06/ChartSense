@@ -109,6 +109,17 @@ class SearchViewModel: ObservableObject {
         searchResults = []
         hasSearched = false
     }
+    
+    func performSearch() {
+        Task {
+            await performSearch(query: searchText)
+        }
+    }
+    
+    func loadInitialData() {
+        popularStocks = stockService.getPopularStocks()
+        recentSearches = searchService.recentSearches
+    }
 }
 
 // MARK: - Sentiment View Model
@@ -545,6 +556,317 @@ class AIService: ObservableObject {
         // TODO: Integrate with OpenAI API
         // This is where you'll add the actual API call to OpenAI
         return "AI response placeholder"
+    }
+}
+
+// MARK: - Authentication View Model
+class AuthViewModel: ObservableObject {
+    static let shared = AuthViewModel()
+    
+    @Published var isAuthenticated: Bool = false
+    @Published var currentUser: User?
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
+    
+    // Login/Signup form fields
+    @Published var email: String = ""
+    @Published var password: String = ""
+    @Published var name: String = ""
+    @Published var isSignupMode: Bool = false
+    
+    init() {
+        // Check if user is already logged in
+        checkAuthenticationStatus()
+    }
+    
+    private func checkAuthenticationStatus() {
+        // Check UserDefaults for existing session
+        isAuthenticated = UserDefaults.standard.bool(forKey: "isAuthenticated")
+    }
+    
+    func signInWithEmail() {
+        guard !email.isEmpty && !password.isEmpty else {
+            errorMessage = "Please fill in all fields"
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        // Simulate authentication
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.isLoading = false
+            self.authenticateUser()
+        }
+    }
+    
+    func signUpWithEmail() {
+        guard !email.isEmpty && !password.isEmpty && !name.isEmpty else {
+            errorMessage = "Please fill in all fields"
+            return
+        }
+        
+        guard password.count >= 6 else {
+            errorMessage = "Password must be at least 6 characters"
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        // Simulate signup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.isLoading = false
+            self.authenticateUser()
+        }
+    }
+    
+    func signInWithApple() {
+        isLoading = true
+        errorMessage = nil
+        
+        // Simulate Apple Sign In
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.isLoading = false
+            self.authenticateUser()
+        }
+    }
+    
+    func signInWithGoogle() {
+        isLoading = true
+        errorMessage = nil
+        
+        // Simulate Google Sign In
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.isLoading = false
+            self.authenticateUser()
+        }
+    }
+    
+    private func authenticateUser() {
+        let user = User(
+            id: UUID().uuidString,
+            email: email.isEmpty ? "user@example.com" : email,
+            name: name.isEmpty ? "User" : name,
+            authProvider: .email,
+            createdAt: Date()
+        )
+        
+        currentUser = user
+        isAuthenticated = true
+        
+        // Save to UserDefaults
+        UserDefaults.standard.set(true, forKey: "isAuthenticated")
+    }
+    
+    func signOut() {
+        currentUser = nil
+        isAuthenticated = false
+        UserDefaults.standard.set(false, forKey: "isAuthenticated")
+        
+        // Clear form fields
+        email = ""
+        password = ""
+        name = ""
+    }
+    
+    func toggleMode() {
+        isSignupMode.toggle()
+        errorMessage = nil
+    }
+}
+
+// MARK: - Home View Model
+class HomeViewModel: ObservableObject {
+    @Published var widgets: [HomeWidget] = []
+    @Published var widgetData: WidgetData?
+    @Published var isLoading: Bool = false
+    @Published var showingWidgetCustomization: Bool = false
+    
+    private let stockService = StockService.shared
+    private let newsService = NewsService.shared
+    private let sentimentService = SentimentService.shared
+    
+    init() {
+        setupDefaultWidgets()
+        loadWidgetData()
+    }
+    
+    private func setupDefaultWidgets() {
+        // Load saved widgets or use defaults
+        let savedWidgets = UserDefaults.standard.data(forKey: "homeWidgets")
+        if let savedWidgets = savedWidgets,
+           let decodedWidgets = try? JSONDecoder().decode([HomeWidget].self, from: savedWidgets) {
+            self.widgets = decodedWidgets
+        } else {
+            // Default widget configuration
+            self.widgets = [
+                HomeWidget(type: .search, size: .medium, order: 0, isEnabled: true),
+                HomeWidget(type: .news, size: .medium, order: 1, isEnabled: true),
+                HomeWidget(type: .watchlist, size: .large, order: 2, isEnabled: true),
+                HomeWidget(type: .ai, size: .medium, order: 3, isEnabled: true)
+            ]
+        }
+    }
+    
+    func addWidget(_ type: HomeWidget.WidgetType) {
+        let newOrder = widgets.count
+        let newWidget = HomeWidget(type: type, size: .medium, order: newOrder, isEnabled: true)
+        widgets.append(newWidget)
+        saveWidgetConfiguration()
+    }
+    
+    func removeWidget(_ widget: HomeWidget) {
+        widgets.removeAll { $0.id == widget.id }
+        // Reorder remaining widgets
+        for (index, widget) in widgets.enumerated() {
+            if let widgetIndex = widgets.firstIndex(where: { $0.id == widget.id }) {
+                widgets[widgetIndex].order = index
+            }
+        }
+        saveWidgetConfiguration()
+    }
+    
+    func loadWidgetData() {
+        isLoading = true
+        
+        // Load data for each enabled widget
+        let enabledWidgets = widgets.filter { $0.isEnabled }
+        
+        // Simulate data loading
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.widgetData = WidgetData(
+                searchData: self.createSearchData(),
+                newsData: self.createNewsData(),
+                watchlistData: self.createWatchlistData(),
+                aiData: self.createAIData(),
+                marketData: self.createMarketData(),
+                trendingData: self.createTrendingData()
+            )
+            self.isLoading = false
+        }
+    }
+    
+    private func createSearchData() -> SearchWidgetData {
+        return SearchWidgetData(
+            recentSearches: ["AAPL", "TSLA", "NVDA"],
+            popularStocks: stockService.getPopularStocks()
+        )
+    }
+    
+    private func createNewsData() -> NewsWidgetData {
+        // Generate mock news data for the widget
+        let mockNews = [
+            NewsItem(
+                headline: "Tech Stocks Rally on Strong Earnings Reports",
+                summary: "Major technology companies exceeded analyst expectations, driving market optimism.",
+                source: "Bloomberg",
+                publishedAt: Date().addingTimeInterval(-3600),
+                url: "https://example.com/news/1",
+                category: .earnings,
+                sentiment: 0.7,
+                relevanceScore: 0.9,
+                imageURL: nil
+            ),
+            NewsItem(
+                headline: "Federal Reserve Signals Potential Rate Cuts",
+                summary: "Central bank officials hint at possible monetary policy adjustments.",
+                source: "Reuters",
+                publishedAt: Date().addingTimeInterval(-7200),
+                url: "https://example.com/news/2",
+                category: .economic,
+                sentiment: 0.5,
+                relevanceScore: 0.8,
+                imageURL: nil
+            ),
+            NewsItem(
+                headline: "AI Sector Continues Strong Growth Momentum",
+                summary: "Artificial intelligence companies report record-breaking quarterly results.",
+                source: "CNBC",
+                publishedAt: Date().addingTimeInterval(-10800),
+                url: "https://example.com/news/3",
+                category: .technology,
+                sentiment: 0.8,
+                relevanceScore: 0.9,
+                imageURL: nil
+            )
+        ]
+        
+        return NewsWidgetData(
+            headlines: mockNews,
+            watchlistNews: Array(mockNews.prefix(2))
+        )
+    }
+    
+    private func createWatchlistData() -> WatchlistWidgetData {
+        // Use popular stocks from service for watchlist
+        let watchlistStocks = stockService.getPopularStocks().prefix(3).map { $0 }
+        
+        var sentiments: [String: SentimentAnalysis] = [:]
+        for stock in watchlistStocks {
+            sentiments[stock.symbol] = sentimentService.getSentiment(for: stock.symbol)
+        }
+        
+        return WatchlistWidgetData(stocks: watchlistStocks, sentiments: sentiments)
+    }
+    
+    private func createAIData() -> AIWidgetData {
+        return AIWidgetData(
+            insights: [
+                "Market sentiment is bullish today with tech stocks leading gains.",
+                "Consider watching AI and semiconductor stocks for momentum."
+            ],
+            suggestedQuestions: [
+                "What's driving today's market rally?",
+                "Which sectors look most promising?"
+            ]
+        )
+    }
+    
+    private func createMarketData() -> MarketWidgetData {
+        return MarketWidgetData(
+            indices: [
+                MarketIndex(name: "S&P 500", symbol: "^GSPC", price: 4850.25, change: 45.30, changePercent: 0.94),
+                MarketIndex(name: "NASDAQ", symbol: "^IXIC", price: 15250.75, change: 125.50, changePercent: 0.83),
+                MarketIndex(name: "DOW", symbol: "^DJI", price: 38250.40, change: 180.20, changePercent: 0.47)
+            ],
+            sentiment: 0.75
+        )
+    }
+    
+    private func createTrendingData() -> TrendingWidgetData {
+        return TrendingWidgetData(
+            stocks: stockService.getPopularStocks(),
+            trends: ["AI", "Semiconductors", "EV", "Biotech"]
+        )
+    }
+    
+    func saveWidgetConfiguration() {
+        if let encoded = try? JSONEncoder().encode(widgets) {
+            UserDefaults.standard.set(encoded, forKey: "homeWidgets")
+        }
+    }
+    
+    func toggleWidget(_ widget: HomeWidget) {
+        if let index = widgets.firstIndex(where: { $0.id == widget.id }) {
+            widgets[index].isEnabled.toggle()
+            saveWidgetConfiguration()
+        }
+    }
+    
+
+    
+    func updateWidgetOrder(from source: IndexSet, to destination: Int) {
+        widgets.move(fromOffsets: source, toOffset: destination)
+        
+        // Update order numbers
+        for (index, widget) in widgets.enumerated() {
+            if let widgetIndex = widgets.firstIndex(where: { $0.id == widget.id }) {
+                widgets[widgetIndex].order = index
+            }
+        }
+        
+        saveWidgetConfiguration()
     }
 }
 

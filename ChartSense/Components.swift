@@ -206,6 +206,8 @@ struct NewsCard: View {
         case .macro: return theme.colors.success
         case .competitor: return Color.indigo
         case .general: return theme.colors.neutral
+        case .economic: return Color.brown
+        case .technology: return Color.cyan
         }
     }
     
@@ -875,5 +877,450 @@ struct RoundedCorner: Shape {
     func path(in rect: CGRect) -> Path {
         let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
         return Path(path.cgPath)
+    }
+}
+
+// MARK: - Authentication Components
+struct AuthButton: View {
+    let title: String
+    let icon: String
+    let backgroundColor: Color
+    let textColor: Color
+    let action: () -> Void
+    let isLoading: Bool
+    
+    init(title: String, icon: String, backgroundColor: Color, textColor: Color = .white, isLoading: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.backgroundColor = backgroundColor
+        self.textColor = textColor
+        self.isLoading = isLoading
+        self.action = action
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .progressViewStyle(CircularProgressViewStyle(tint: textColor))
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .medium))
+                }
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundColor(textColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(backgroundColor)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+            )
+        }
+        .disabled(isLoading)
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct AuthTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    let isSecure: Bool
+    @FocusState private var isFocused: Bool
+    
+    init(placeholder: String, text: Binding<String>, isSecure: Bool = false) {
+        self.placeholder = placeholder
+        self._text = text
+        self.isSecure = isSecure
+    }
+    
+    var body: some View {
+        Group {
+            if isSecure {
+                SecureField(placeholder, text: $text)
+            } else {
+                TextField(placeholder, text: $text)
+            }
+        }
+        .font(.system(size: 16, weight: .regular))
+        .foregroundColor(.black)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(Color.white)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isFocused ? Color.blue : Color.gray.opacity(0.3), lineWidth: isFocused ? 2 : 1)
+        )
+        .focused($isFocused)
+    }
+}
+
+struct DividerWithText: View {
+    let text: String
+    
+    var body: some View {
+        HStack {
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(height: 1)
+            
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color.gray)
+                .padding(.horizontal, 16)
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(height: 1)
+        }
+    }
+}
+
+// MARK: - Home Widget Components
+struct HomeWidgetCard<Content: View>: View {
+    let widget: HomeWidget
+    let content: Content
+    let onTap: (() -> Void)?
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    init(widget: HomeWidget, onTap: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.widget = widget
+        self.onTap = onTap
+        self.content = content()
+    }
+    
+    var body: some View {
+        Button(action: { onTap?() }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Widget Header
+                HStack {
+                    Image(systemName: widget.type.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    
+                    Text(widget.type.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Spacer()
+                    
+                    if onTap != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    }
+                }
+                
+                // Widget Content
+                content
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity)
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+            )
+            .shadow(
+                color: themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color,
+                radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
+                x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
+                y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct SearchWidget: View {
+    let data: SearchWidgetData
+    let onStockSelected: (Stock) -> Void
+    let onSearchTapped: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Search Bar
+            Button(action: onSearchTapped) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    
+                    Text("Search stocks...")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                .cornerRadius(8)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            // Popular Stocks
+            if !data.popularStocks.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(data.popularStocks.prefix(4), id: \.symbol) { stock in
+                        Button(action: { onStockSelected(stock) }) {
+                            VStack(alignment: .center, spacing: 2) {
+                                Text(stock.symbol)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                
+                                Text(stock.formattedPrice)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                            .cornerRadius(6)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct NewsWidget: View {
+    let data: NewsWidgetData
+    let onNewsTapped: (NewsItem) -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(data.headlines.prefix(2), id: \.id) { news in
+                Button(action: { onNewsTapped(news) }) {
+                    HStack(alignment: .top, spacing: 8) {
+                        // News content
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(news.headline)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            
+                            HStack {
+                                Text(news.source)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                
+                                Spacer()
+                                
+                                Text(news.timeAgo)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                if news.id != data.headlines.prefix(2).last?.id {
+                    Divider()
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                }
+            }
+        }
+    }
+}
+
+struct WatchlistWidget: View {
+    let data: WatchlistWidgetData
+    let onStockTapped: (Stock) -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(data.stocks.prefix(3), id: \.symbol) { stock in
+                Button(action: { onStockTapped(stock) }) {
+                    HStack(spacing: 8) {
+                        // Stock info
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(stock.symbol)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            
+                            Text(stock.companyName)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        // Price and sentiment
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(stock.formattedPrice)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                
+                            HStack(spacing: 4) {
+                                Text(stock.formattedChange)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                            
+                                // Sentiment indicator
+                                if let sentiment = data.sentiments[stock.symbol] {
+                                    Image(systemName: sentiment.overallRating.icon)
+                                        .font(.system(size: 8, weight: .medium))
+                                        .foregroundColor(Color(sentiment.overallRating.color))
+                                }
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                if stock.symbol != data.stocks.prefix(3).last?.symbol {
+                    Divider()
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                }
+            }
+        }
+    }
+}
+
+struct AIWidget: View {
+    let data: AIWidgetData
+    let onAITapped: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // AI Insight
+            if let insight = data.insights.first {
+                Text(insight)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            // Quick action button
+            Button(action: onAITapped) {
+                HStack {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 12, weight: .medium))
+                    
+                    Text("Ask AI anything...")
+                        .font(.system(size: 12, weight: .medium))
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+}
+
+struct MarketOverviewWidget: View {
+    let data: MarketWidgetData
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(data.indices.prefix(3), id: \.symbol) { index in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(index.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        
+                        Text(index.symbol)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(String(format: "%.2f", index.price))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        
+                        HStack(spacing: 4) {
+                            Text(String(format: "%.2f", index.change))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(index.change >= 0 ? .green : .red)
+                            
+                            Text(String(format: "(%.2f%%)", index.changePercent))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(index.change >= 0 ? .green : .red)
+                        }
+                    }
+                }
+                
+                if index.symbol != data.indices.prefix(3).last?.symbol {
+                    Divider()
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                }
+            }
+        }
+    }
+}
+
+struct TrendingStocksWidget: View {
+    let data: TrendingWidgetData
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Trending topics
+            if !data.trends.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(data.trends.prefix(4), id: \.self) { trend in
+                        Text(trend)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                            .cornerRadius(4)
+                    }
+                }
+            }
+            
+            // Trending stocks
+            if !data.stocks.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(data.stocks.prefix(4), id: \.symbol) { stock in
+                        VStack(alignment: .center, spacing: 2) {
+                            Text(stock.symbol)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            
+                            Text(stock.formattedPrice)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
     }
 } 

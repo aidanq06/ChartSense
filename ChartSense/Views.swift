@@ -7,6 +7,132 @@
 
 import SwiftUI
 
+// MARK: - Discover View (Combined Search + Sentiment)
+struct DiscoverView: View {
+    @StateObject private var searchViewModel = SearchViewModel()
+    @StateObject private var sentimentViewModel = SentimentViewModel()
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                DiscoverHeader()
+                
+                // Content
+                if let selectedStock = appViewModel.selectedStock {
+                    // Show sentiment for selected stock
+                    SentimentContent(viewModel: sentimentViewModel)
+                        .onAppear {
+                            sentimentViewModel.loadData(for: selectedStock)
+                        }
+                } else {
+                    // Show search interface
+                    SearchContent(viewModel: searchViewModel)
+                }
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            .navigationBarHidden(true)
+        }
+        .onReceive(appViewModel.$selectedStock) { stock in
+            if let stock = stock {
+                sentimentViewModel.loadData(for: stock)
+            }
+        }
+        .onAppear {
+            // Load initial data
+            searchViewModel.loadInitialData()
+        }
+    }
+}
+
+struct DiscoverHeader: View {
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Discover")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                
+                Spacer()
+                
+                if appViewModel.selectedStock != nil {
+                    Button(action: {
+                        appViewModel.selectedStock = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+}
+
+struct SearchContent: View {
+    @ObservedObject var viewModel: SearchViewModel
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search Bar
+            SearchBar(
+                text: $viewModel.searchText,
+                placeholder: "Search stocks, ETFs...",
+                onCommit: {
+                    viewModel.performSearch()
+                }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            
+            // Content
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if viewModel.isLoading {
+                        LoadingCard()
+                    } else if viewModel.hasSearched && viewModel.searchResults.isEmpty {
+                        EmptySearchCard()
+                    } else if !viewModel.searchResults.isEmpty {
+                        SearchResultsSection(
+                            results: viewModel.searchResults,
+                            onSelect: { stock in
+                                appViewModel.selectStock(stock)
+                            }
+                        )
+                    } else {
+                        // Default content when not searching
+                        if !viewModel.recentSearches.isEmpty {
+                            RecentSearchesSection(
+                                searches: viewModel.recentSearches,
+                                onSelect: viewModel.selectRecentSearch
+                            )
+                        }
+                        
+                        PopularStocksSection(
+                            stocks: viewModel.popularStocks,
+                            onSelect: { stock in
+                                appViewModel.selectStock(stock)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 70) // Tab bar spacing
+            }
+        }
+    }
+}
+
 // MARK: - Search View
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
@@ -490,6 +616,282 @@ struct EmptyWatchlistView: View {
     }
 }
 
+// MARK: - Home View
+struct HomeView: View {
+    @StateObject private var viewModel = HomeViewModel()
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                HomeHeader(
+                    onCustomize: { viewModel.showingWidgetCustomization = true }
+                )
+                
+                // Widgets
+                if viewModel.isLoading {
+                    Spacer()
+                    ProgressView("Loading your dashboard...")
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(viewModel.widgets.filter { $0.isEnabled }.sorted { $0.order < $1.order }, id: \.id) { widget in
+                                widgetView(for: widget)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 70) // Tab bar spacing
+                    }
+                }
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $viewModel.showingWidgetCustomization) {
+            WidgetCustomizationView(viewModel: viewModel)
+        }
+        .onAppear {
+            viewModel.loadWidgetData()
+        }
+    }
+    
+    @ViewBuilder
+    private func widgetView(for widget: HomeWidget) -> some View {
+        switch widget.type {
+        case .search:
+            if let data = viewModel.widgetData?.searchData {
+                HomeWidgetCard(widget: widget, onTap: {
+                    appViewModel.selectedTab = 1 // Switch to Discover tab
+                }) {
+                    SearchWidget(
+                        data: data,
+                        onStockSelected: { stock in
+                            appViewModel.selectStock(stock)
+                            appViewModel.selectedTab = 1 // Switch to Discover tab
+                        },
+                        onSearchTapped: {
+                            appViewModel.selectedTab = 1 // Switch to Discover tab
+                        }
+                    )
+                }
+            }
+            
+        case .news:
+            if let data = viewModel.widgetData?.newsData {
+                HomeWidgetCard(widget: widget, onTap: {
+                    // TODO: Navigate to full news view
+                }) {
+                    NewsWidget(
+                        data: data,
+                        onNewsTapped: { news in
+                            // TODO: Open news article
+                        }
+                    )
+                }
+            }
+            
+        case .watchlist:
+            if let data = viewModel.widgetData?.watchlistData {
+                HomeWidgetCard(widget: widget, onTap: {
+                    appViewModel.selectedTab = 3 // Switch to Watchlist tab
+                }) {
+                    WatchlistWidget(
+                        data: data,
+                        onStockTapped: { stock in
+                            appViewModel.selectStock(stock)
+                            appViewModel.selectedTab = 1 // Switch to Discover tab
+                        }
+                    )
+                }
+            }
+            
+        case .ai:
+            if let data = viewModel.widgetData?.aiData {
+                HomeWidgetCard(widget: widget, onTap: {
+                    appViewModel.selectedTab = 2 // Switch to AI tab
+                }) {
+                    AIWidget(
+                        data: data,
+                        onAITapped: {
+                            appViewModel.selectedTab = 2 // Switch to AI tab
+                        }
+                    )
+                }
+            }
+            
+        case .marketOverview:
+            if let data = viewModel.widgetData?.marketData {
+                HomeWidgetCard(widget: widget) {
+                    MarketOverviewWidget(data: data)
+                }
+            }
+            
+        case .trendingStocks:
+            if let data = viewModel.widgetData?.trendingData {
+                HomeWidgetCard(widget: widget) {
+                    TrendingStocksWidget(data: data)
+                }
+            }
+        }
+    }
+}
+
+struct HomeHeader: View {
+    let onCustomize: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Home")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text("Your personalized dashboard")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                Button(action: onCustomize) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .padding(8)
+                        .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                        .cornerRadius(10)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+}
+
+struct WidgetCustomizationView: View {
+    @ObservedObject var viewModel: HomeViewModel
+    @Environment(\.presentationMode) var presentationMode
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("Cancel") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    
+                    Spacer()
+                    
+                    Text("Customize Home")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Spacer()
+                    
+                    Button("Done") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                
+                Divider()
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                
+                // Widget List
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(HomeWidget.WidgetType.allCases, id: \.self) { widgetType in
+                            WidgetCustomizationRow(
+                                widgetType: widgetType,
+                                isEnabled: viewModel.widgets.contains { $0.type == widgetType && $0.isEnabled },
+                                onToggle: {
+                                    if let widget = viewModel.widgets.first(where: { $0.type == widgetType }) {
+                                        viewModel.toggleWidget(widget)
+                                    } else {
+                                        // Widget doesn't exist, add it
+                                        viewModel.addWidget(widgetType)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            .navigationBarHidden(true)
+        }
+    }
+}
+
+struct WidgetCustomizationRow: View {
+    let widgetType: HomeWidget.WidgetType
+    let isEnabled: Bool
+    let onToggle: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 16) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: widgetType.icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                }
+                
+                // Content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(widgetType.title)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text(widgetType.description)
+                        .font(.caption)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                // Toggle
+                Toggle("", isOn: Binding(
+                    get: { isEnabled },
+                    set: { _ in onToggle() }
+                ))
+                .toggleStyle(SwitchToggleStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(PlainButtonStyle())
+        
+        Divider()
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+            .padding(.leading, 76)
+    }
+}
+
 // MARK: - AI View
 struct AIView: View {
     @StateObject private var viewModel = AIViewModel()
@@ -597,10 +999,190 @@ struct AIHeader: View {
     }
 }
 
+// MARK: - Authentication View
+struct AuthView: View {
+    @ObservedObject private var viewModel = AuthViewModel.shared
+    @State private var logoScale: CGFloat = 0.8
+    @State private var formOffset: CGFloat = 50
+    @State private var formOpacity: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Clean white background
+            Color.white
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Logo Section
+                    VStack(spacing: 24) {
+                        // App Logo
+                        ZStack {
+                            Image("AppIconImage")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 80, height: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.blue, lineWidth: 2)
+                                )
+                                .scaleEffect(logoScale)
+                                .animation(.spring(response: 0.8, dampingFraction: 0.6), value: logoScale)
+                        }
+                        
+                        VStack(spacing: 8) {
+                            Text("ChartSense")
+                                .font(.system(size: 32, weight: .bold, design: .default))
+                                .foregroundColor(.black)
+                            
+                            Text("AI-Powered Stock Sentiment Analysis")
+                                .font(.system(size: 16, weight: .medium, design: .default))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .padding(.top, 60)
+                    .padding(.bottom, 40)
+                    
+                    // Form Section
+                    VStack(spacing: 24) {
+                        // Social Login Buttons
+                        VStack(spacing: 12) {
+                            AuthButton(
+                                title: "Continue with Apple",
+                                icon: "applelogo",
+                                backgroundColor: .black,
+                                isLoading: viewModel.isLoading
+                            ) {
+                                viewModel.signInWithApple()
+                            }
+                            
+                            AuthButton(
+                                title: "Continue with Google",
+                                icon: "globe",
+                                backgroundColor: .white,
+                                textColor: .black,
+                                isLoading: viewModel.isLoading
+                            ) {
+                                viewModel.signInWithGoogle()
+                            }
+                        }
+                        
+                        DividerWithText(text: "or")
+                        
+                        // Email Form
+                        VStack(spacing: 16) {
+                            if viewModel.isSignupMode {
+                                AuthTextField(
+                                    placeholder: "Full Name",
+                                    text: $viewModel.name
+                                )
+                            }
+                            
+                            AuthTextField(
+                                placeholder: "Email",
+                                text: $viewModel.email
+                            )
+                            
+                            AuthTextField(
+                                placeholder: "Password",
+                                text: $viewModel.password,
+                                isSecure: true
+                            )
+                            
+                            // Error Message
+                            if let errorMessage = viewModel.errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.red)
+                                    .padding(.top, 8)
+                            }
+                            
+                            // Primary Action Button
+                            AuthButton(
+                                title: viewModel.isSignupMode ? "Sign Up for Free" : "Sign In",
+                                icon: "envelope.fill",
+                                backgroundColor: .blue,
+                                isLoading: viewModel.isLoading
+                            ) {
+                                if viewModel.isSignupMode {
+                                    viewModel.signUpWithEmail()
+                                } else {
+                                    viewModel.signInWithEmail()
+                                }
+                            }
+                            
+                            // Toggle Mode Button
+                            Button(action: viewModel.toggleMode) {
+                                HStack(spacing: 4) {
+                                    Text(viewModel.isSignupMode ? "Already have an account?" : "Don't have an account?")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.gray)
+                                    
+                                    Text(viewModel.isSignupMode ? "Sign In" : "Sign Up")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .offset(y: formOffset)
+                    .opacity(formOpacity)
+                    .animation(.easeOut(duration: 0.8).delay(0.3), value: formOffset)
+                    .animation(.easeOut(duration: 0.8).delay(0.3), value: formOpacity)
+                    
+                    Spacer(minLength: 40)
+                    
+                    // Terms and Conditions
+                    VStack(spacing: 8) {
+                        Text("By continuing, you agree to our")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.gray)
+                        
+                        HStack(spacing: 4) {
+                            Button("Terms of Service") {
+                                // TODO: Show Terms of Service
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.blue)
+                            
+                            Text("and")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.gray)
+                            
+                            Button("Privacy Policy") {
+                                // TODO: Show Privacy Policy
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+        .onAppear {
+            // Animate logo
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.6)) {
+                logoScale = 1.0
+            }
+            
+            // Animate form
+            formOffset = 0
+            formOpacity = 1.0
+        }
+        .preferredColorScheme(.light) // Force light mode for login
+    }
+}
+
 // MARK: - Settings View
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var authViewModel = AuthViewModel.shared
     
     var body: some View {
         NavigationView {
@@ -790,6 +1372,20 @@ struct SettingsView: View {
                                     subtitle: "Share your feedback",
                                     icon: "star.fill",
                                     action: viewModel.rateApp
+                                )
+                            }
+                        }
+                        
+                        // Account Section
+                        SettingsSection(title: "Account") {
+                            VStack(spacing: 16) {
+                                SettingActionCard(
+                                    title: "Sign Out",
+                                    subtitle: "Sign out of your account",
+                                    icon: "rectangle.portrait.and.arrow.right",
+                                    action: {
+                                        authViewModel.signOut()
+                                    }
                                 )
                             }
                         }

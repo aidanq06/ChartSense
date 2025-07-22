@@ -115,6 +115,18 @@ struct NewsItem: Codable, Identifiable {
     let relevanceScore: Double
     let imageURL: String?
     
+    init(headline: String, summary: String, source: String, publishedAt: Date, url: String, category: NewsCategory, sentiment: Double, relevanceScore: Double, imageURL: String?) {
+        self.headline = headline
+        self.summary = summary
+        self.source = source
+        self.publishedAt = publishedAt
+        self.url = url
+        self.category = category
+        self.sentiment = sentiment
+        self.relevanceScore = relevanceScore
+        self.imageURL = imageURL
+    }
+    
     enum NewsCategory: String, CaseIterable, Codable {
         case earnings = "Earnings & Financials"
         case product = "Product & Innovation"
@@ -123,6 +135,8 @@ struct NewsItem: Codable, Identifiable {
         case macro = "Macro Impact"
         case competitor = "Competitor Landscape"
         case general = "General News"
+        case economic = "Economic News"
+        case technology = "Technology News"
         
         var icon: String {
             switch self {
@@ -133,6 +147,8 @@ struct NewsItem: Codable, Identifiable {
             case .macro: return "globe"
             case .competitor: return "building.2.fill"
             case .general: return "newspaper.fill"
+            case .economic: return "chart.bar.fill"
+            case .technology: return "cpu.fill"
             }
         }
         
@@ -145,6 +161,8 @@ struct NewsItem: Codable, Identifiable {
             case .macro: return "green"
             case .competitor: return "indigo"
             case .general: return "gray"
+            case .economic: return "brown"
+            case .technology: return "cyan"
             }
         }
     }
@@ -390,5 +408,159 @@ struct SuggestedMessage: Identifiable {
             case .news: return "newspaper.fill"
             }
         }
+    }
+}
+
+// MARK: - Authentication Models
+struct User: Codable {
+    let id: String
+    let email: String
+    let name: String
+    let authProvider: AuthProvider
+    let createdAt: Date
+    
+    enum AuthProvider: String, Codable {
+        case email = "email"
+        case apple = "apple"
+        case google = "google"
+    }
+}
+
+struct LoginCredentials {
+    let email: String
+    let password: String
+}
+
+struct SignupCredentials {
+    let email: String
+    let password: String
+    let name: String
+}
+
+// MARK: - Home Widget Models
+struct HomeWidget: Identifiable, Codable {
+    let id = UUID()
+    let type: WidgetType
+    let size: WidgetSize
+    var order: Int
+    var isEnabled: Bool
+    
+    init(type: WidgetType, size: WidgetSize, order: Int, isEnabled: Bool) {
+        self.type = type
+        self.size = size
+        self.order = order
+        self.isEnabled = isEnabled
+    }
+    
+    enum WidgetType: String, CaseIterable, Codable {
+        case search = "search"
+        case news = "news"
+        case watchlist = "watchlist"
+        case ai = "ai"
+        case marketOverview = "market_overview"
+        case trendingStocks = "trending_stocks"
+        
+        var title: String {
+            switch self {
+            case .search: return "Search"
+            case .news: return "News"
+            case .watchlist: return "Watchlist"
+            case .ai: return "AI Insights"
+            case .marketOverview: return "Market Overview"
+            case .trendingStocks: return "Trending Stocks"
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .search: return "magnifyingglass"
+            case .news: return "newspaper"
+            case .watchlist: return "heart"
+            case .ai: return "brain.head.profile"
+            case .marketOverview: return "chart.line.uptrend.xyaxis"
+            case .trendingStocks: return "chart.bar.fill"
+            }
+        }
+        
+        var description: String {
+            switch self {
+            case .search: return "Quick stock search and sentiment analysis"
+            case .news: return "Latest market news and insights"
+            case .watchlist: return "Your saved stocks and their performance"
+            case .ai: return "AI-powered market insights and analysis"
+            case .marketOverview: return "Major indices and market sentiment"
+            case .trendingStocks: return "Most popular and trending stocks"
+            }
+        }
+    }
+    
+    enum WidgetSize: String, CaseIterable, Codable {
+        case small = "small"
+        case medium = "medium"
+        case large = "large"
+        
+        var height: CGFloat {
+            switch self {
+            case .small: return 80
+            case .medium: return 120
+            case .large: return 160
+            }
+        }
+    }
+}
+
+struct WidgetData {
+    let searchData: SearchWidgetData?
+    let newsData: NewsWidgetData?
+    let watchlistData: WatchlistWidgetData?
+    let aiData: AIWidgetData?
+    let marketData: MarketWidgetData?
+    let trendingData: TrendingWidgetData?
+}
+
+struct SearchWidgetData {
+    let recentSearches: [String]
+    let popularStocks: [Stock]
+}
+
+struct NewsWidgetData {
+    let headlines: [NewsItem]
+    let watchlistNews: [NewsItem]
+}
+
+struct WatchlistWidgetData {
+    let stocks: [Stock]
+    let sentiments: [String: SentimentAnalysis]
+}
+
+struct AIWidgetData {
+    let insights: [String]
+    let suggestedQuestions: [String]
+}
+
+struct MarketWidgetData {
+    let indices: [MarketIndex]
+    let sentiment: Double
+}
+
+struct TrendingWidgetData {
+    let stocks: [Stock]
+    let trends: [String]
+}
+
+struct MarketIndex: Identifiable, Codable {
+    let id = UUID()
+    let name: String
+    let symbol: String
+    let price: Double
+    let change: Double
+    let changePercent: Double
+    
+    init(name: String, symbol: String, price: Double, change: Double, changePercent: Double) {
+        self.name = name
+        self.symbol = symbol
+        self.price = price
+        self.change = change
+        self.changePercent = changePercent
     }
 }

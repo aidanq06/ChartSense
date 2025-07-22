@@ -106,6 +106,10 @@ class SentimentService: ObservableObject {
         }
     }
     
+    func getSentiment(for symbol: String) -> SentimentAnalysis {
+        return generateMockSentiment(for: symbol)
+    }
+    
     private func generateMockSentiment(for _: String) -> SentimentAnalysis {
         let ratings = SentimentAnalysis.SentimentRating.allCases
         let randomRating = ratings.randomElement() ?? .neutral

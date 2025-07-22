@@ -11,23 +11,27 @@ import SwiftData
 struct ContentView: View {
     @StateObject private var appViewModel = AppViewModel()
     @StateObject private var themeManager = ThemeManager.shared
-    
+    @ObservedObject private var authViewModel = AuthViewModel.shared
+
     var body: some View {
-        ZStack {
-            // Background color that respects theme
-            (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Main Content Area
-                                        ZStack {
+        Group {
+            if authViewModel.isAuthenticated {
+                // Main App
+                ZStack {
+                    // Background color that respects theme
+                    (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 0) {
+                        // Main Content Area
+                        ZStack {
                             switch appViewModel.selectedTab {
                             case 0:
-                                SearchView()
+                                HomeView()
                                     .environmentObject(appViewModel)
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             case 1:
-                                SentimentView()
+                                DiscoverView()
                                     .environmentObject(appViewModel)
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             case 2:
@@ -42,22 +46,27 @@ struct ContentView: View {
                                 SettingsView()
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             default:
-                                SearchView()
+                                HomeView()
                                     .environmentObject(appViewModel)
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             }
                         }
                 
-                // Custom Bottom Tab Bar
-                CustomTabBar(
-                    selectedTab: $appViewModel.selectedTab,
-                    themeManager: themeManager
-                )
+                        // Custom Bottom Tab Bar
+                        CustomTabBar(
+                            selectedTab: $appViewModel.selectedTab,
+                            themeManager: themeManager
+                        )
+                    }
+                }
+                .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
+                .onReceive(themeManager.$isDarkMode) { _ in
+                    // Force UI update when theme changes
+                }
+            } else {
+                // Login Screen
+                AuthView()
             }
-        }
-        .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
-        .onReceive(themeManager.$isDarkMode) { _ in
-            // Force UI update when theme changes
         }
     }
 }
@@ -68,8 +77,8 @@ struct CustomTabBar: View {
     @ObservedObject var themeManager: ThemeManager
     
     private let tabs = [
-        TabItem(icon: "magnifyingglass", index: 0),
-        TabItem(icon: "chart.line.uptrend.xyaxis", index: 1),
+        TabItem(icon: "house.fill", index: 0),
+        TabItem(icon: "magnifyingglass", index: 1),
         TabItem(icon: "brain.head.profile", index: 2),
         TabItem(icon: "heart.fill", index: 3),
         TabItem(icon: "gearshape.fill", index: 4)
@@ -136,6 +145,7 @@ struct CustomTabButton: View {
 struct MainAppView: View {
     @StateObject private var appViewModel = AppViewModel()
     @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var authViewModel = AuthViewModel.shared
     @State private var showingSplashScreen = true
     
     var body: some View {
@@ -155,58 +165,46 @@ struct MainAppView: View {
                 showingSplashScreen = false
             }
         }
+        .preferredColorScheme(authViewModel.isAuthenticated ? (themeManager.isDarkMode ? .dark : .light) : .light)
     }
 }
 
 struct SplashScreenView: View {
     @StateObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var authViewModel = AuthViewModel.shared
     @State private var animateText = false
     
     var body: some View {
         ZStack {
-            // Background
-            (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            // Background - Always light for splash screen
+            AppTheme.light.colors.background
                 .ignoresSafeArea()
             
             VStack(spacing: 40) {
-                // App Icon/Logo - Clean and Simple
-                if themeManager.isDarkMode {
-                    // For dark mode, use a styled version
-                    Image("AppIconImage")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
-                        )
-                } else {
-                    // For light mode, use the original icon
-                    Image("AppIconImage")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                }
+                // App Icon/Logo - Clean and Simple (always light mode style)
+                Image("AppIconImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 100, height: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
                 
                 // App Title
                 VStack(spacing: 12) {
                     Text("ChartSense")
                         .font(.system(size: 36, weight: .bold, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        .foregroundColor(AppTheme.light.colors.primaryText)
                         .opacity(animateText ? 1.0 : 0.0)
                         .animation(.easeInOut(duration: 1.0).delay(0.3), value: animateText)
                     
                     Text("AI-Powered Stock Sentiment Analysis")
                         .font(.system(size: 16, weight: .medium, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .foregroundColor(AppTheme.light.colors.secondaryText)
                         .opacity(animateText ? 1.0 : 0.0)
                         .animation(.easeInOut(duration: 1.0).delay(0.6), value: animateText)
                 }
             }
         }
-        .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
+        .preferredColorScheme(.light) // Force light mode for splash screen
         .onAppear {
             animateText = true
         }
