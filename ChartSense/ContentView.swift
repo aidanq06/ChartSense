@@ -11,67 +11,124 @@ import SwiftData
 struct ContentView: View {
     @StateObject private var appViewModel = AppViewModel()
     @StateObject private var themeManager = ThemeManager.shared
-
+    
     var body: some View {
         ZStack {
             // Background color that respects theme
             (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
                 .ignoresSafeArea()
             
-            TabView(selection: $appViewModel.selectedTab) {
-                // Search Tab
-                SearchView()
-                    .environmentObject(appViewModel)
-                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
-                    .tabItem {
-                        VStack {
-                            Image(systemName: "magnifyingglass")
-                            Text("Search")
+            VStack(spacing: 0) {
+                // Main Content Area
+                                        ZStack {
+                            switch appViewModel.selectedTab {
+                            case 0:
+                                SearchView()
+                                    .environmentObject(appViewModel)
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            case 1:
+                                SentimentView()
+                                    .environmentObject(appViewModel)
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            case 2:
+                                AIView()
+                                    .environmentObject(appViewModel)
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            case 3:
+                                WatchlistView()
+                                    .environmentObject(appViewModel)
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            case 4:
+                                SettingsView()
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            default:
+                                SearchView()
+                                    .environmentObject(appViewModel)
+                                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                            }
                         }
-                    }
-                    .tag(0)
                 
-                // Sentiment Tab
-                SentimentView()
-                    .environmentObject(appViewModel)
-                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
-                    .tabItem {
-                        VStack {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                            Text("Sentiment")
-                        }
-                    }
-                    .tag(1)
-                
-                // Watchlist Tab
-                WatchlistView()
-                    .environmentObject(appViewModel)
-                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
-                    .tabItem {
-                        VStack {
-                            Image(systemName: "heart.fill")
-                            Text("Watchlist")
-                        }
-                    }
-                    .tag(2)
-                
-                // Settings Tab
-                SettingsView()
-                    .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
-                    .tabItem {
-                        VStack {
-                            Image(systemName: "gearshape.fill")
-                            Text("Settings")
-                        }
-                    }
-                    .tag(3)
+                // Custom Bottom Tab Bar
+                CustomTabBar(
+                    selectedTab: $appViewModel.selectedTab,
+                    themeManager: themeManager
+                )
             }
-            .accentColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
         }
         .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
         .onReceive(themeManager.$isDarkMode) { _ in
             // Force UI update when theme changes
         }
+    }
+}
+
+// MARK: - Custom Tab Bar
+struct CustomTabBar: View {
+    @Binding var selectedTab: Int
+    @ObservedObject var themeManager: ThemeManager
+    
+    private let tabs = [
+        TabItem(icon: "magnifyingglass", index: 0),
+        TabItem(icon: "chart.line.uptrend.xyaxis", index: 1),
+        TabItem(icon: "brain.head.profile", index: 2),
+        TabItem(icon: "heart.fill", index: 3),
+        TabItem(icon: "gearshape.fill", index: 4)
+    ]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Subtle top border
+            Rectangle()
+                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                .frame(height: 0.3)
+            
+            // Tab bar content
+            HStack(spacing: 0) {
+                ForEach(tabs, id: \.index) { tab in
+                    CustomTabButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab.index,
+                        themeManager: themeManager
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedTab = tab.index
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 4)
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        }
+    }
+}
+
+struct TabItem {
+    let icon: String
+    let index: Int
+}
+
+struct CustomTabButton: View {
+    let tab: TabItem
+    let isSelected: Bool
+    @ObservedObject var themeManager: ThemeManager
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            // Icon only - no text, no VStack
+            Image(systemName: tab.icon)
+                .font(.system(size: isSelected ? 22 : 20, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(
+                    isSelected 
+                        ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

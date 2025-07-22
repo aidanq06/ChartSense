@@ -347,3 +347,48 @@ final class WatchlistItem {
         self.notes = notes
     }
 }
+
+// MARK: - AI Chat Models
+struct ChatMessage: Identifiable, Codable {
+    let id = UUID()
+    let content: String
+    let isUser: Bool
+    let timestamp: Date
+    let messageType: MessageType
+    
+    enum MessageType: String, Codable {
+        case text = "text"
+        case suggestion = "suggestion"
+        case error = "error"
+        case loading = "loading"
+    }
+    
+    init(content: String, isUser: Bool, messageType: MessageType = .text) {
+        self.content = content
+        self.isUser = isUser
+        self.timestamp = Date()
+        self.messageType = messageType
+    }
+}
+
+struct SuggestedMessage: Identifiable {
+    let id = UUID()
+    let text: String
+    let category: SuggestionCategory
+    
+    enum SuggestionCategory: String, CaseIterable {
+        case analysis = "Analysis"
+        case education = "Education"
+        case portfolio = "Portfolio"
+        case news = "News"
+        
+        var icon: String {
+            switch self {
+            case .analysis: return "chart.line.uptrend.xyaxis"
+            case .education: return "book.fill"
+            case .portfolio: return "briefcase.fill"
+            case .news: return "newspaper.fill"
+            }
+        }
+    }
+}

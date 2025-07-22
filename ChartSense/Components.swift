@@ -654,9 +654,226 @@ struct ErrorCard: View {
     }
 }
 
+// MARK: - AI Chat Components
+struct ChatBubble: View {
+    let message: ChatMessage
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack {
+            if message.isUser {
+                Spacer(minLength: 60)
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(message.content)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .cornerRadius(18)
+                        .cornerRadius(4, corners: [.topLeft, .topRight, .bottomLeft])
+                    
+                    Text(message.timestamp.timeAgoDisplay())
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                        .padding(.trailing, 4)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: 8) {
+                        // AI Avatar
+                        ZStack {
+                            Circle()
+                                .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                                .frame(width: 28, height: 28)
+                            
+                            Image(systemName: "brain.head.profile")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        }
+                        
+                        Text(message.content)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                            .cornerRadius(18)
+                            .cornerRadius(4, corners: [.topLeft, .topRight, .bottomRight])
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                            )
+                    }
+                    
+                    Text(message.timestamp.timeAgoDisplay())
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                        .padding(.leading, 36)
+                }
+                
+                Spacer(minLength: 60)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+    }
+}
+
+struct TypingIndicator: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animationOffset: CGFloat = 0
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 8) {
+                    // AI Avatar
+                    ZStack {
+                        Circle()
+                            .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                            .frame(width: 28, height: 28)
+                        
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    }
+                    
+                    // Typing dots
+                    HStack(spacing: 4) {
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                .frame(width: 6, height: 6)
+                                .scaleEffect(1.0)
+                                .animation(
+                                    Animation.easeInOut(duration: 0.6)
+                                        .repeatForever()
+                                        .delay(Double(index) * 0.2),
+                                    value: animationOffset
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                    .cornerRadius(18)
+                    .cornerRadius(4, corners: [.topLeft, .topRight, .bottomRight])
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                    )
+                }
+            }
+            
+            Spacer(minLength: 60)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .onAppear {
+            animationOffset = 1
+        }
+    }
+}
+
+struct SuggestedMessageButton: View {
+    let suggestion: SuggestedMessage
+    let onTap: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Image(systemName: suggestion.category.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                
+                Text(suggestion.text)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct ChatInputField: View {
+    @Binding var text: String
+    let onSend: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Input field
+            TextField("Ask me anything about stocks, markets, or investing...", text: $text, axis: .vertical)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            isFocused ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border),
+                            lineWidth: isFocused ? 1.5 : 0.5
+                        )
+                )
+                .focused($isFocused)
+                .onSubmit {
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        onSend()
+                    }
+                }
+            
+            // Send button
+            Button(action: onSend) {
+                ZStack {
+                    Circle()
+                        .fill(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .animation(.easeInOut(duration: 0.2), value: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+    }
+}
+
 // MARK: - Extensions
 extension View {
     func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+    
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 } 

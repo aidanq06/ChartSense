@@ -25,12 +25,6 @@ struct SearchView: View {
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         
                         Spacer()
-                        
-                        Button(action: { appViewModel.themeManager.toggleTheme() }) {
-                            Image(systemName: appViewModel.themeManager.isDarkMode ? "sun.max.fill" : "moon.fill")
-                                .font(.title2)
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                        }
                     }
                     
                     SearchBar(
@@ -74,7 +68,7 @@ struct SearchView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 100) // Tab bar spacing
+                    .padding(.bottom, 70) // Tab bar spacing
                 }
             }
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
@@ -206,7 +200,7 @@ struct SentimentView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 100) // Tab bar spacing
+                    .padding(.bottom, 70) // Tab bar spacing
                 }
             }
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
@@ -412,7 +406,7 @@ struct WatchlistView: View {
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 100) // Tab bar spacing
+                        .padding(.bottom, 70) // Tab bar spacing
                     }
                 }
             }
@@ -493,6 +487,113 @@ struct EmptyWatchlistView: View {
             
             Spacer()
         }
+    }
+}
+
+// MARK: - AI View
+struct AIView: View {
+    @StateObject private var viewModel = AIViewModel()
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                AIHeader(onReset: viewModel.resetChat)
+                
+                // Chat Messages
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(viewModel.messages) { message in
+                                ChatBubble(message: message)
+                                    .id(message.id)
+                            }
+                            
+                            if viewModel.isTyping {
+                                TypingIndicator()
+                            }
+                        }
+                        .padding(.bottom, 20)
+                    }
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                
+                // Suggested Messages (only show if no conversation yet)
+                if viewModel.messages.count <= 1 {
+                    VStack(spacing: 12) {
+                        Text("Try asking about:")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .padding(.top, 8)
+                        
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 8) {
+                            ForEach(viewModel.suggestedMessages) { suggestion in
+                                SuggestedMessageButton(suggestion: suggestion) {
+                                    viewModel.sendSuggestedMessage(suggestion)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+                
+                // Input Field
+                ChatInputField(text: $viewModel.inputText, onSend: viewModel.sendMessage)
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            .navigationBarHidden(true)
+        }
+    }
+}
+
+struct AIHeader: View {
+    let onReset: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("AI Assistant")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text("Your financial intelligence companion")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                Button(action: onReset) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .medium))
+                        Text("New Chat")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                    .cornerRadius(12)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
     }
 }
 
@@ -695,7 +796,7 @@ struct SettingsView: View {
                     }
                     .padding(.horizontal, 20)
                 }
-                .padding(.bottom, 100) // Tab bar spacing
+                .padding(.bottom, 70) // Tab bar spacing
             }
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
             .navigationBarHidden(true)

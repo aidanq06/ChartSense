@@ -455,6 +455,99 @@ class SettingsViewModel: ObservableObject {
     }
 }
 
+// MARK: - AI View Model
+class AIViewModel: ObservableObject {
+    @Published var messages: [ChatMessage] = []
+    @Published var inputText: String = ""
+    @Published var isTyping: Bool = false
+    @Published var suggestedMessages: [SuggestedMessage] = []
+    
+    private let aiService = AIService()
+    
+    init() {
+        setupInitialMessages()
+        setupSuggestedMessages()
+    }
+    
+    private func setupInitialMessages() {
+        let welcomeMessage = ChatMessage(
+            content: "Hello! I'm your AI financial assistant. I can help you analyze stocks, explain market concepts, and provide insights about your portfolio. What would you like to know?",
+            isUser: false
+        )
+        messages.append(welcomeMessage)
+    }
+    
+    private func setupSuggestedMessages() {
+        suggestedMessages = [
+            SuggestedMessage(text: "Analyze AAPL's current sentiment", category: .analysis),
+            SuggestedMessage(text: "What is a P/E ratio?", category: .education),
+            SuggestedMessage(text: "How should I diversify my portfolio?", category: .portfolio),
+            SuggestedMessage(text: "Latest market news", category: .news),
+            SuggestedMessage(text: "Explain technical analysis", category: .education),
+            SuggestedMessage(text: "Compare TSLA vs NIO", category: .analysis)
+        ]
+    }
+    
+    func sendMessage() {
+        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        let userMessage = ChatMessage(content: inputText, isUser: true)
+        messages.append(userMessage)
+        
+        let userInput = inputText
+        inputText = ""
+        
+        // Show typing indicator
+        isTyping = true
+        
+        // Simulate AI response (replace with actual OpenAI API call)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.isTyping = false
+            let aiResponse = self.generateAIResponse(to: userInput)
+            let aiMessage = ChatMessage(content: aiResponse, isUser: false)
+            self.messages.append(aiMessage)
+        }
+    }
+    
+    func sendSuggestedMessage(_ suggestion: SuggestedMessage) {
+        inputText = suggestion.text
+        sendMessage()
+    }
+    
+    func resetChat() {
+        messages.removeAll()
+        setupInitialMessages()
+    }
+    
+    private func generateAIResponse(to userInput: String) -> String {
+        // Mock AI responses - replace with actual OpenAI API integration
+        let lowercasedInput = userInput.lowercased()
+        
+        if lowercasedInput.contains("aapl") || lowercasedInput.contains("apple") {
+            return "Apple (AAPL) is currently showing strong fundamentals with a P/E ratio of 28.5. Recent earnings beat expectations, and the iPhone 15 launch has been well-received. Technical indicators suggest a bullish trend, with support at $170 and resistance at $190. The company's services revenue growth and strong cash position make it an attractive long-term investment."
+        } else if lowercasedInput.contains("p/e") || lowercasedInput.contains("price to earnings") {
+            return "The Price-to-Earnings (P/E) ratio measures a company's stock price relative to its earnings per share. It's calculated by dividing the market value per share by the earnings per share. A higher P/E suggests investors expect higher earnings growth, while a lower P/E might indicate undervaluation or lower growth expectations. The average P/E for the S&P 500 is around 20."
+        } else if lowercasedInput.contains("diversify") || lowercasedInput.contains("portfolio") {
+            return "Diversification is key to managing investment risk. Consider spreading your investments across different sectors (tech, healthcare, finance), asset classes (stocks, bonds, ETFs), and market caps (large, mid, small). A well-diversified portfolio typically includes 10-20 different stocks across various industries. Don't forget to include some international exposure and consider your risk tolerance."
+        } else if lowercasedInput.contains("technical") || lowercasedInput.contains("analysis") {
+            return "Technical analysis uses historical price and volume data to predict future price movements. Key concepts include support/resistance levels, moving averages, RSI, MACD, and chart patterns. While useful for timing entries and exits, technical analysis works best when combined with fundamental analysis. Remember that past performance doesn't guarantee future results."
+        } else if lowercasedInput.contains("tsla") || lowercasedInput.contains("tesla") {
+            return "Tesla (TSLA) is a high-growth electric vehicle company with significant market volatility. Recent quarterly results show strong delivery numbers but margin pressure from price competition. The stock trades at a premium P/E due to growth expectations. Key factors to watch include delivery growth, margin trends, and competition from traditional automakers entering the EV space."
+        } else {
+            return "I understand you're asking about \(userInput). As an AI financial assistant, I can help you analyze stocks, explain market concepts, and provide portfolio insights. Could you please be more specific about what you'd like to know? I can help with stock analysis, market education, portfolio advice, or current market news."
+        }
+    }
+}
+
+// MARK: - AI Service
+class AIService: ObservableObject {
+    func sendMessage(_ message: String) async -> String {
+        // TODO: Integrate with OpenAI API
+        // This is where you'll add the actual API call to OpenAI
+        return "AI response placeholder"
+    }
+}
+
 // MARK: - Utility Extensions
 extension Date {
     func timeAgoDisplay() -> String {
