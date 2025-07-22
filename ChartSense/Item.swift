@@ -41,11 +41,46 @@ final class Stock {
     
     var formattedChange: String {
         let sign = dailyChange >= 0 ? "+" : ""
-        return String(format: "%@%.2f (%.2f%%)", sign, dailyChange, dailyChangePercent)
+        return String(format: "%@%.2f", sign, dailyChange)
+    }
+    
+    var formattedChangePercent: String {
+        let sign = dailyChangePercent >= 0 ? "+" : ""
+        return String(format: "%@%.2f%%", sign, dailyChangePercent)
+    }
+    
+    var formattedMarketCap: String {
+        guard let marketCap = marketCap else { return "N/A" }
+        return formatLargeNumber(marketCap)
+    }
+    
+    var formattedVolume: String {
+        guard let volume = volume else { return "N/A" }
+        return formatLargeNumber(Double(volume))
+    }
+    
+    var formatted52WeekHigh: String {
+        // Mock 52-week high for now
+        let highPrice = currentPrice * 1.2
+        return String(format: "$%.2f", highPrice)
     }
     
     var isPositiveChange: Bool {
         return dailyChange >= 0
+    }
+    
+    private func formatLargeNumber(_ number: Double) -> String {
+        if number >= 1e12 {
+            return String(format: "%.1fT", number / 1e12)
+        } else if number >= 1e9 {
+            return String(format: "%.1fB", number / 1e9)
+        } else if number >= 1e6 {
+            return String(format: "%.1fM", number / 1e6)
+        } else if number >= 1e3 {
+            return String(format: "%.1fK", number / 1e3)
+        } else {
+            return String(format: "%.0f", number)
+        }
     }
 }
 
@@ -231,6 +266,14 @@ struct MarketContext: Codable, Identifiable {
     let upcomingEvents: [MarketEvent]
     let communityPulse: CommunityData
     let lastUpdated: Date
+    
+    var summary: String {
+        let sectorTrend = sectorPerformance.dailyChange >= 0 ? "positive" : "negative"
+        let marketTrend = macroEnvironment.marketTrend.lowercased()
+        let eventCount = upcomingEvents.filter { $0.isUpcoming }.count
+        
+        return "The \(sectorPerformance.name) sector is showing \(sectorTrend) momentum in a \(marketTrend) market environment. There are \(eventCount) upcoming events that could impact \(symbol) performance."
+    }
 }
 
 struct SectorData: Codable {

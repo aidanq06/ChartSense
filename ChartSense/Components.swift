@@ -1323,4 +1323,342 @@ struct TrendingStocksWidget: View {
             }
         }
     }
-} 
+}
+
+// MARK: - Stock Detail Sheet Components
+struct StockOverviewCard: View {
+    let stock: Stock
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(stock.symbol)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text(stock.companyName)
+                        .font(.body)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(stock.formattedPrice)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.caption)
+                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        
+                        Text(stock.formattedChange)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        
+                        Text("(\(stock.formattedChangePercent))")
+                            .font(.caption)
+                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                    }
+                }
+            }
+            
+            // Key Metrics
+            HStack(spacing: 20) {
+                MetricItem(title: "Market Cap", value: stock.formattedMarketCap)
+                MetricItem(title: "Volume", value: stock.formattedVolume)
+                MetricItem(title: "52W High", value: stock.formatted52WeekHigh)
+            }
+        }
+        .padding(20)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: shadowColor,
+            radius: shadowRadius,
+            x: shadowX,
+            y: shadowY
+        )
+    }
+    
+    private var shadowColor: Color {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color
+    }
+    
+    private var shadowRadius: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius
+    }
+    
+    private var shadowX: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x
+    }
+    
+    private var shadowY: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+    }
+}
+
+struct MetricItem: View {
+    let title: String
+    let value: String
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            
+            Text(value)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+        }
+    }
+}
+
+struct SentimentOverviewCard: View {
+    let sentiment: SentimentAnalysis
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                
+                Text("Sentiment Analysis")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                
+                Spacer()
+                
+                Text(sentiment.overallRating.rawValue)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(Color(sentiment.overallRating.color))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(sentiment.overallRating.color).opacity(0.1))
+                    .cornerRadius(6)
+            }
+            
+            // Sentiment Score
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Overall Score")
+                        .font(.body)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    
+                    Spacer()
+                    
+                    Text("\(Int(sentiment.score * 100))%")
+                        .font(.body)
+                        .fontWeight(.semibold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                }
+                
+                SentimentScoreBar(score: sentiment.score, theme: themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+            }
+            
+            // Key Drivers
+            if !sentiment.keyDrivers.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Key Drivers")
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    ForEach(sentiment.keyDrivers.prefix(3), id: \.self) { driver in
+                        HStack {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 4))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            
+                            Text(driver)
+                                .font(.body)
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: shadowColor,
+            radius: shadowRadius,
+            x: shadowX,
+            y: shadowY
+        )
+    }
+    
+    private var shadowColor: Color {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color
+    }
+    
+    private var shadowRadius: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius
+    }
+    
+    private var shadowX: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x
+    }
+    
+    private var shadowY: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+    }
+}
+
+struct NewsOverviewSection: View {
+    let newsItems: [NewsItem]
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                Image(systemName: "newspaper")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                
+                Text("Latest News")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                
+                Spacer()
+            }
+            
+            // News Items
+            VStack(spacing: 12) {
+                ForEach(newsItems.prefix(3), id: \.id) { news in
+                    NewsOverviewItem(news: news)
+                }
+            }
+        }
+        .padding(20)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: shadowColor,
+            radius: shadowRadius,
+            x: shadowX,
+            y: shadowY
+        )
+    }
+    
+    private var shadowColor: Color {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color
+    }
+    
+    private var shadowRadius: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius
+    }
+    
+    private var shadowX: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x
+    }
+    
+    private var shadowY: CGFloat {
+        themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+    }
+}
+
+struct NewsOverviewItem: View {
+    let news: NewsItem
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(news.headline)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            
+            HStack {
+                Text(news.source)
+                    .font(.caption)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                
+                Spacer()
+                
+                Text(news.timeAgo)
+                    .font(.caption)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+            }
+        }
+        .padding(12)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+        .cornerRadius(8)
+    }
+}
+
+struct MarketContextCard: View {
+    let marketContext: MarketContext
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                
+                Text("Market Context")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                
+                Spacer()
+            }
+            
+            // Content
+            Text(marketContext.summary)
+                .font(.body)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(20)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color,
+            radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
+            x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
+            y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+        )
+    }
+}
+

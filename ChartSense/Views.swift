@@ -13,6 +13,7 @@ struct DiscoverView: View {
     @StateObject private var sentimentViewModel = SentimentViewModel()
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var showingStockDetail = false
     
     var body: some View {
         NavigationView {
@@ -20,24 +21,27 @@ struct DiscoverView: View {
                 // Header
                 DiscoverHeader()
                 
-                // Content
-                if let selectedStock = appViewModel.selectedStock {
-                    // Show sentiment for selected stock
-                    SentimentContent(viewModel: sentimentViewModel)
-                        .onAppear {
-                            sentimentViewModel.loadData(for: selectedStock)
-                        }
-                } else {
-                    // Show search interface
-                    SearchContent(viewModel: searchViewModel)
-                }
+                // Search Content (Always visible)
+                SearchContent(viewModel: searchViewModel)
             }
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
             .navigationBarHidden(true)
         }
+        .sheet(isPresented: $showingStockDetail) {
+            if let selectedStock = appViewModel.selectedStock {
+                StockDetailSheet(
+                    stock: selectedStock,
+                    sentimentViewModel: sentimentViewModel,
+                    onDismiss: {
+                        appViewModel.selectedStock = nil
+                        showingStockDetail = false
+                    }
+                )
+            }
+        }
         .onReceive(appViewModel.$selectedStock) { stock in
-            if let stock = stock {
-                sentimentViewModel.loadData(for: stock)
+            if stock != nil {
+                showingStockDetail = true
             }
         }
         .onAppear {
@@ -47,8 +51,101 @@ struct DiscoverView: View {
     }
 }
 
+// MARK: - Stock Detail Sheet
+struct StockDetailSheet: View {
+    let stock: Stock
+    @ObservedObject var sentimentViewModel: SentimentViewModel
+    let onDismiss: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                StockDetailHeader(stock: stock, onDismiss: onDismiss)
+                
+                // Content
+                ScrollView {
+                    LazyVStack(spacing: 20) {
+                        // Stock Overview Card
+                        StockOverviewCard(stock: stock)
+                        
+                        // Sentiment Analysis
+                        if let sentiment = sentimentViewModel.sentiment {
+                            SentimentOverviewCard(sentiment: sentiment)
+                        }
+                        
+                        // News Section
+                        if !sentimentViewModel.newsItems.isEmpty {
+                            NewsOverviewSection(newsItems: sentimentViewModel.newsItems)
+                        }
+                        
+                        // Market Context
+                        if let marketContext = sentimentViewModel.marketContext {
+                            MarketContextCard(marketContext: marketContext)
+                        }
+                        
+                        // Analyst Consensus
+                        if let consensus = sentimentViewModel.analystConsensus {
+                            AnalystConsensusDetailCard(consensus: consensus)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
+                }
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            .navigationBarHidden(true)
+        }
+        .onAppear {
+            sentimentViewModel.loadData(for: stock)
+        }
+    }
+}
+
+struct StockDetailHeader: View {
+    let stock: Stock
+    let onDismiss: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        .frame(width: 32, height: 32)
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                        .cornerRadius(8)
+                }
+                
+                Spacer()
+                
+                VStack(spacing: 4) {
+                    Text(stock.symbol)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text(stock.companyName)
+                        .font(.caption)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                // Invisible spacer for balance
+                Color.clear
+                    .frame(width: 32, height: 32)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+}
+
 struct DiscoverHeader: View {
-    @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
@@ -60,16 +157,6 @@ struct DiscoverHeader: View {
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 
                 Spacer()
-                
-                if appViewModel.selectedStock != nil {
-                    Button(action: {
-                        appViewModel.selectedStock = nil
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                    }
-                }
             }
         }
         .padding(.horizontal, 16)
@@ -93,11 +180,11 @@ struct SearchContent: View {
                 }
             )
             .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.bottom, 20)
             
             // Content
             ScrollView {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: 20) {
                     if viewModel.isLoading {
                         LoadingCard()
                     } else if viewModel.hasSearched && viewModel.searchResults.isEmpty {
@@ -1742,18 +1829,22 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.title3)
-                .fontWeight(.semibold)
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
             
             if let count = count {
-                Text("(\(count))")
-                    .font(.body)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                Text("\(count)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                    .cornerRadius(6)
             }
             
             Spacer()
         }
+        .padding(.bottom, 8)
     }
 }
 
@@ -1762,33 +1853,55 @@ struct StockListRow: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        NotionCard {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(stock.symbol)
-                        .font(.body)
-                        .fontWeight(.semibold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(stock.companyName)
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        .lineLimit(1)
-                }
+        HStack(alignment: .center, spacing: 16) {
+            // Stock Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(stock.symbol)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 
-                Spacer()
+                Text(stock.companyName)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Price Info
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(stock.formattedPrice)
+                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(stock.formattedPrice)
-                        .font(.system(size: 17, weight: .semibold, design: .monospaced))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                HStack(spacing: 4) {
+                    Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
                     
                     Text(stock.formattedChange)
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(stock.isPositiveChange ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success) : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error))
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                    
+                    Text("(\(String(format: "%.2f%%", stock.dailyChangePercent)))")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
                 }
             }
         }
+        .padding(16)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .shadow(
+            color: themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color,
+            radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
+            x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
+            y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+        )
     }
 }
 
