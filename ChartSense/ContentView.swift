@@ -115,6 +115,7 @@ struct SplashScreenView: View {
             VStack(spacing: 32) {
                 // App Icon/Logo
                 ZStack {
+                    // Icon Container with subtle gradient
                     Circle()
                         .fill(
                             LinearGradient(
@@ -134,15 +135,38 @@ struct SplashScreenView: View {
                             value: animateIcon
                         )
                     
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 50, weight: .bold))
-                        .foregroundColor(.white)
-                        .scaleEffect(animateIcon ? 1.0 : 0.8)
-                        .animation(
-                            Animation.easeInOut(duration: 1.5)
-                                .repeatForever(autoreverses: true),
-                            value: animateIcon
-                        )
+                    // App Icon with proper masking and dark mode handling
+                    if themeManager.isDarkMode {
+                        // For dark mode, use a styled version
+                        Image("AppIconImage")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
+                            )
+                            .scaleEffect(animateIcon ? 1.0 : 0.8)
+                            .animation(
+                                Animation.easeInOut(duration: 1.5)
+                                    .repeatForever(autoreverses: true),
+                                value: animateIcon
+                            )
+                    } else {
+                        // For light mode, use the original icon
+                        Image("AppIconImage")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .scaleEffect(animateIcon ? 1.0 : 0.8)
+                            .animation(
+                                Animation.easeInOut(duration: 1.5)
+                                    .repeatForever(autoreverses: true),
+                                value: animateIcon
+                            )
+                    }
                 }
                 
                 // App Title
