@@ -11,7 +11,7 @@ import SwiftData
 struct ContentView: View {
     @StateObject private var appViewModel = AppViewModel()
     @StateObject private var themeManager = ThemeManager.shared
-    
+
     var body: some View {
         ZStack {
             // Background color that respects theme
@@ -103,7 +103,6 @@ struct MainAppView: View {
 
 struct SplashScreenView: View {
     @StateObject private var themeManager = ThemeManager.shared
-    @State private var animateIcon = false
     @State private var animateText = false
     
     var body: some View {
@@ -112,82 +111,46 @@ struct SplashScreenView: View {
             (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
                 .ignoresSafeArea()
             
-            VStack(spacing: 32) {
-                // App Icon/Logo
-                ZStack {
-                    // Icon Container with subtle gradient
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
-                                    themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+            VStack(spacing: 40) {
+                // App Icon/Logo - Clean and Simple
+                if themeManager.isDarkMode {
+                    // For dark mode, use a styled version
+                    Image("AppIconImage")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
                         )
-                        .frame(width: 120, height: 120)
-                        .scaleEffect(animateIcon ? 1.1 : 1.0)
-                        .animation(
-                            Animation.easeInOut(duration: 1.5)
-                                .repeatForever(autoreverses: true),
-                            value: animateIcon
-                        )
-                    
-                    // App Icon with proper masking and dark mode handling
-                    if themeManager.isDarkMode {
-                        // For dark mode, use a styled version
-                        Image("AppIconImage")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
-                            )
-                            .scaleEffect(animateIcon ? 1.0 : 0.8)
-                            .animation(
-                                Animation.easeInOut(duration: 1.5)
-                                    .repeatForever(autoreverses: true),
-                                value: animateIcon
-                            )
-                    } else {
-                        // For light mode, use the original icon
-                        Image("AppIconImage")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .scaleEffect(animateIcon ? 1.0 : 0.8)
-                            .animation(
-                                Animation.easeInOut(duration: 1.5)
-                                    .repeatForever(autoreverses: true),
-                                value: animateIcon
-                            )
-                    }
+                } else {
+                    // For light mode, use the original icon
+                    Image("AppIconImage")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
                 
                 // App Title
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     Text("ChartSense")
                         .font(.system(size: 36, weight: .bold, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         .opacity(animateText ? 1.0 : 0.0)
-                        .animation(.easeInOut(duration: 1.0).delay(0.5), value: animateText)
+                        .animation(.easeInOut(duration: 1.0).delay(0.3), value: animateText)
                     
                     Text("AI-Powered Stock Sentiment Analysis")
                         .font(.system(size: 16, weight: .medium, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                         .opacity(animateText ? 1.0 : 0.0)
-                        .animation(.easeInOut(duration: 1.0).delay(0.8), value: animateText)
+                        .animation(.easeInOut(duration: 1.0).delay(0.6), value: animateText)
                 }
             }
         }
         .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
         .onAppear {
-            animateIcon = true
             animateText = true
         }
     }

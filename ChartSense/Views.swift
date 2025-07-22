@@ -1519,9 +1519,25 @@ struct AboutView: View {
                             )
                             .frame(width: 100, height: 100)
                         
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundColor(.white)
+                        if themeManager.isDarkMode {
+                            // For dark mode, use a styled version
+                            Image("AppIconImage")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
+                                )
+                        } else {
+                            // For light mode, use the original icon
+                            Image("AppIconImage")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
                     }
                     
                     // App Info
