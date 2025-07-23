@@ -1,0 +1,233 @@
+# Xcode
+#
+# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
+
+## User settings
+xcuserdata/
+
+## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
+*.xcscmblueprint
+*.xccheckout
+
+## compatibility with Xcode 3 and earlier (ignoring not required starting Xcode 4)
+build/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+## Obj-C/Swift specific
+*.hmap
+
+## App packaging
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+## Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager
+#
+# Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
+# Packages/
+# Package.pins
+# Package.resolved
+# *.xcodeproj
+#
+# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
+# hence it is not needed unless you have added a package configuration file to your project
+# .swiftpm
+
+.build/
+
+# CocoaPods
+#
+# We recommend against adding the Pods directory to your .gitignore. However
+# you should judge for yourself, the pros and cons are mentioned at:
+# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
+#
+# Pods/
+#
+# Add this line if you want to avoid checking in source code from the Xcode workspace
+# *.xcworkspace
+
+# Carthage
+#
+# Add this line if you want to avoid checking in source code from Carthage dependencies.
+# Carthage/Checkouts
+
+Carthage/Build/
+
+# Accio dependency management
+Dependencies/
+.accio/
+
+# fastlane
+#
+# It is recommended to not store the screenshots in the git repo.
+# Instead, use fastlane to re-generate the screenshots whenever they are needed.
+# For more information about the recommended setup visit:
+# https://docs.fastlane.tools/best-practices/source-control/
+
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code Injection
+#
+# After new code Injection tools there's a generated folder /iOSInjectionProject
+# https://github.com/johnno1962/injectionforxcode
+
+iOSInjectionProject/
+
+# ===========================================
+# SECURITY: SENSITIVE FILES
+# ===========================================
+
+# API Keys and Configuration Files
+ChartSense/Config.plist
+**/Config.plist
+**/config.plist
+**/secrets.plist
+**/Secrets.plist
+**/keys.plist
+**/Keys.plist
+
+# Environment Files
+.env
+.env.local
+.env.development
+.env.production
+*.env
+
+# Certificate Files
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+
+# Provisioning Profiles
+*.mobileprovision
+*.provisionprofile
+
+# App Store Connect API Keys
+*.p8
+
+# Firebase Configuration
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+
+# Supabase Configuration
+supabase/.env
+supabase/.env.local
+
+# ===========================================
+# DEVELOPMENT FILES
+# ===========================================
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+Logs/
+
+# Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ===========================================
+# BUILD ARTIFACTS
+# ===========================================
+
+# Xcode Build Products
+build/
+DerivedData/
+*.app
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# ===========================================
+# TESTING
+# ===========================================
+
+# Test Results
+test-results/
+coverage/
+*.coverage
+
+# ===========================================
+# DOCUMENTATION
+# ===========================================
+
+# Generated Documentation
+docs/generated/
+Documentation/generated/
+
+# ===========================================
+# DEPLOYMENT
+# ===========================================
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# App Store Connect
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# ===========================================
+# CUSTOM FILES FOR CHARTSENSE
+# ===========================================
+
+# Local development files
+local/
+Local/
+
+# Backup files
+*.backup
+*.bak
+
+# Database files (if any local databases)
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache files
+cache/
+Cache/
+*.cache 

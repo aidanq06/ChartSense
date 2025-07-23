@@ -13,9 +13,9 @@ import Supabase
 class SupabaseService: ObservableObject {
     static let shared = SupabaseService()
     
-    // Replace with your Supabase project URL and anon key
-    private let supabaseURL = "YOUR_SUPABASE_URL"
-    private let supabaseAnonKey = "YOUR_SUPABASE_ANON_KEY"
+    // Load from secure configuration
+    private let supabaseURL = Config.supabaseURL
+    private let supabaseAnonKey = Config.supabaseAnonKey
     
     private var client: SupabaseClient?
     

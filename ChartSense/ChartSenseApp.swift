@@ -31,7 +31,21 @@ struct ChartSenseApp: App {
                 .modelContainer(sharedModelContainer)
                 .onAppear {
                     setupAppearance()
+                    validateConfiguration()
                 }
+        }
+    }
+    
+    private func validateConfiguration() {
+        // Validate configuration on app startup
+        if Config.validateConfiguration() {
+            Config.printDebugInfo()
+        } else {
+            print("❌ Configuration validation failed. Please check your Config.plist file.")
+            #if DEBUG
+            print("💡 Make sure you've added your API keys to ChartSense/Config.plist")
+            print("💡 Ensure Config.plist is in your .gitignore file")
+            #endif
         }
     }
     
