@@ -37,15 +37,28 @@ struct ChartSenseApp: App {
     }
     
     private func validateConfiguration() {
-        // Validate configuration on app startup
+        print("🔍 Validating app configuration...")
+        
+        // Validate Config.plist setup
         if Config.validateConfiguration() {
+            print("✅ Configuration validation passed")
             Config.printDebugInfo()
+            
+            // Debug Supabase configuration
+            SupabaseService.shared.debugConfiguration()
         } else {
             print("❌ Configuration validation failed. Please check your Config.plist file.")
-            #if DEBUG
             print("💡 Make sure you've added your API keys to ChartSense/Config.plist")
             print("💡 Ensure Config.plist is in your .gitignore file")
-            #endif
+            print("💡 Verify Config.plist is included in your Xcode project bundle")
+            
+            // Check if Config.plist exists in bundle
+            if let path = Bundle.main.path(forResource: "Config", ofType: "plist") {
+                print("✅ Config.plist found at: \(path)")
+            } else {
+                print("❌ Config.plist not found in app bundle")
+                print("💡 Add Config.plist to your Xcode project target")
+            }
         }
     }
     

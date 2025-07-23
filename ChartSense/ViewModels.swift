@@ -649,13 +649,27 @@ class AuthViewModel: ObservableObject {
     }
     
     func signInWithApple() {
-        // TODO: Implement Apple Sign In with Supabase
-        errorMessage = "Apple Sign In coming soon"
+        Task {
+            do {
+                try await supabaseService.signInWithApple()
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
     
     func signInWithGoogle() {
-        // TODO: Implement Google Sign In with Supabase
-        errorMessage = "Google Sign In coming soon"
+        Task {
+            do {
+                try await supabaseService.signInWithGoogle()
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
     
     func signOut() {

@@ -70,15 +70,37 @@ struct Config {
     // MARK: - Helper Methods
     private static func loadFromConfigFile(key: String) -> String? {
         // Load from Config.plist file (which should be gitignored)
-        guard let path = Bundle.main.path(forResource: "Config", ofType: "plist"),
-              let dict = NSDictionary(contentsOfFile: path) as? [String: Any] else {
+        guard let path = Bundle.main.path(forResource: "Config", ofType: "plist") else {
+            print("❌ Config.plist file not found in bundle")
             return nil
         }
-        return dict[key] as? String
+        
+        guard let dict = NSDictionary(contentsOfFile: path) as? [String: Any] else {
+            print("❌ Could not load Config.plist as dictionary")
+            return nil
+        }
+        
+        guard let value = dict[key] as? String else {
+            print("❌ Key '\(key)' not found in Config.plist or is not a string")
+            return nil
+        }
+        
+        print("✅ Successfully loaded '\(key)' from Config.plist")
+        return value
     }
     
     // MARK: - Validation
     static func validateConfiguration() -> Bool {
+        print("🔍 Starting configuration validation...")
+        
+        // Check if Config.plist exists in bundle
+        if let path = Bundle.main.path(forResource: "Config", ofType: "plist") {
+            print("✅ Config.plist found at: \(path)")
+        } else {
+            print("❌ Config.plist not found in app bundle")
+            return false
+        }
+        
         let requiredKeys = [
             supabaseURL,
             supabaseAnonKey

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SUPABASE_URL</key>
+	<string>YOUR_SUPABASE_URL_HERE</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>YOUR_SUPABASE_ANON_KEY_HERE</string>
+	<key>ALPHA_VANTAGE_API_KEY</key>
+	<string>YOUR_ALPHA_VANTAGE_API_KEY_HERE</string>
+	<key>OPENAI_API_KEY</key>
+	<string>YOUR_OPENAI_API_KEY_HERE</string>
+	<key>ENABLE_DEBUG_LOGGING</key>
+	<true/>
+	<key>ENABLE_MOCK_DATA</key>
+	<false/>
+	<key>API_TIMEOUT_SECONDS</key>
+	<integer>30</integer>
+	<key>MAX_RETRY_ATTEMPTS</key>
+	<integer>3</integer>
+</dict>
+</plist> 
