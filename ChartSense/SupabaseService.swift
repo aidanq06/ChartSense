@@ -8,6 +8,8 @@
 import Foundation
 import SwiftUI
 import Supabase
+import AuthenticationServices
+import UIKit
 
 // MARK: - Supabase Configuration
 class SupabaseService: ObservableObject {
@@ -471,21 +473,69 @@ class SupabaseService: ObservableObject {
                 throw SupabaseError.networkError
             }
             
-            // TODO: Implement Apple Sign In
-            // This requires additional setup with Apple Developer account
-            print("🍎 Apple Sign In not yet implemented")
+            print("🍎 Starting Apple Sign In...")
             
-            // For now, show a placeholder message
+            // Request Apple ID authorization
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            request.requestedScopes = [.fullName, .email]
+            
+            let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+            
+            // Use async/await pattern for Apple Sign In
+            let result = try await withCheckedThrowingContinuation { continuation in
+                let delegate = AppleSignInDelegate { result in
+                    continuation.resume(with: result)
+                }
+                
+                authorizationController.delegate = delegate
+                authorizationController.presentationContextProvider = delegate
+                authorizationController.performRequests()
+                
+                // Store delegate to prevent deallocation
+                objc_setAssociatedObject(authorizationController, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+            }
+            
+            // Extract credentials from Apple Sign In result
+            guard let appleIDCredential = result as? ASAuthorizationAppleIDCredential,
+                  let identityToken = appleIDCredential.identityToken,
+                  let identityTokenString = String(data: identityToken, encoding: .utf8) else {
+                throw SupabaseError.networkError
+            }
+            
+            print("🍎 Got Apple ID credentials, signing in with Supabase...")
+            
+            // Sign in with Supabase using Apple ID token
+            let response = try await client.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .apple,
+                    idToken: identityTokenString
+                )
+            )
+            
+            let user = response.user
+            let userMetadata = user.userMetadata
+            let userName = userMetadata["name"] as? String ?? "Apple User"
+            
             await MainActor.run {
-                self.errorMessage = "Apple Sign In coming soon!"
+                self.currentUser = User(
+                    id: user.id.uuidString,
+                    email: user.email ?? "",
+                    name: userName,
+                    authProvider: .apple,
+                    createdAt: user.createdAt ?? Date()
+                )
+                self.isAuthenticated = true
                 self.isLoading = false
             }
+            
+            print("✅ Apple Sign In successful: \(user.email ?? "")")
+            
         } catch {
+            print("❌ Apple Sign In error: \(error)")
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
             }
-            print("❌ Apple Sign In error: \(error)")
             throw error
         }
     }
@@ -498,21 +548,27 @@ class SupabaseService: ObservableObject {
                 throw SupabaseError.networkError
             }
             
-            // TODO: Implement Google Sign In
-            // This requires additional setup with Google Cloud Console
-            print("🔍 Google Sign In not yet implemented")
+            print("🔍 Starting Google Sign In...")
             
-            // For now, show a placeholder message
+            // For now, show a message that Google Sign In requires additional setup
             await MainActor.run {
-                self.errorMessage = "Google Sign In coming soon!"
+                self.errorMessage = "Google Sign In requires Google Cloud Console setup. Coming soon!"
                 self.isLoading = false
             }
+            
+            // TODO: Implement Google Sign In with GoogleSignIn SDK
+            // This requires:
+            // 1. Adding GoogleSignIn package to the project
+            // 2. Setting up Google Cloud Console project
+            // 3. Configuring OAuth 2.0 credentials
+            // 4. Adding URL schemes to Info.plist
+            
         } catch {
+            print("❌ Google Sign In error: \(error)")
             await MainActor.run {
                 self.errorMessage = error.localizedDescription
                 self.isLoading = false
             }
-            print("❌ Google Sign In error: \(error)")
             throw error
         }
     }
@@ -666,6 +722,31 @@ struct UserPreferences: Codable {
     let newsAlertsEnabled: Bool
     let refreshInterval: String
     let defaultView: String
+}
+
+// MARK: - Apple Sign In Delegate
+class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private let completion: (Result<ASAuthorization, Error>) -> Void
+    
+    init(completion: @escaping (Result<ASAuthorization, Error>) -> Void) {
+        self.completion = completion
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        completion(.success(authorization))
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        completion(.failure(error))
+    }
+    
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            fatalError("No window available for Apple Sign In")
+        }
+        return window
+    }
 }
 
 // MARK: - Errors
