@@ -38,8 +38,8 @@ class StockService: ObservableObject {
             errorMessage = nil
         }
         
-        // Simulate network delay
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        // Simulate network delay (reduced from 500ms to 100ms)
+        try? await Task.sleep(nanoseconds: 100_000_000)
         
         await MainActor.run {
             if let stock = mockStocks[symbol.uppercased()] {
@@ -97,8 +97,8 @@ class SentimentService: ObservableObject {
             errorMessage = nil
         }
         
-        // Simulate API delay
-        try? await Task.sleep(nanoseconds: 800_000_000)
+        // Simulate API delay (reduced from 800ms to 150ms)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         
         await MainActor.run {
             currentSentiment = generateMockSentiment(for: symbol)
@@ -209,8 +209,8 @@ class NewsService: ObservableObject {
             errorMessage = nil
         }
         
-        // Simulate network delay
-        try? await Task.sleep(nanoseconds: 600_000_000)
+        // Simulate network delay (reduced from 600ms to 200ms)
+        try? await Task.sleep(nanoseconds: 200_000_000)
         
         await MainActor.run {
             newsItems = generateMockNews(for: symbol)
@@ -303,8 +303,8 @@ class MarketContextService: ObservableObject {
             isLoading = true
         }
         
-        // Simulate network delay
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        // Simulate network delay (reduced from 400ms to 150ms)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         
         await MainActor.run {
             marketContext = generateMockMarketContext(for: symbol)
@@ -448,8 +448,8 @@ class SearchService: ObservableObject {
             isLoading = true
         }
         
-        // Simulate search delay
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        // Simulate search delay (reduced from 300ms to 100ms)
+        try? await Task.sleep(nanoseconds: 100_000_000)
         
         await MainActor.run {
             if query.isEmpty {

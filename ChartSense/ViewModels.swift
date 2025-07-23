@@ -293,16 +293,34 @@ class WatchlistViewModel: ObservableObject {
     private func loadAllStockDetails() async {
         let symbols = watchlistItems.map { $0.symbol }
         
-        for symbol in symbols {
-            await stockService.searchStock(symbol: symbol)
-            if let stock = stockService.currentStock, stock.symbol == symbol {
-                stockDetails[symbol] = stock
+        // Load stock details and sentiment in parallel for better performance
+        await withTaskGroup(of: Void.self) { group in
+            for symbol in symbols {
+                group.addTask {
+                    await self.loadStockAndSentiment(for: symbol)
+                }
             }
-            
-            await loadSentiment(for: symbol)
         }
         
         isLoading = false
+    }
+    
+    @MainActor
+    private func loadStockAndSentiment(for symbol: String) async {
+        // Load stock details and sentiment concurrently
+        async let stockTask = loadStockDetails(for: symbol)
+        async let sentimentTask = loadSentiment(for: symbol)
+        
+        // Wait for both to complete
+        _ = await (stockTask, sentimentTask)
+    }
+    
+    @MainActor
+    private func loadStockDetails(for symbol: String) async {
+        await stockService.searchStock(symbol: symbol)
+        if let stock = stockService.currentStock, stock.symbol == symbol {
+            stockDetails[symbol] = stock
+        }
     }
     
     @MainActor
@@ -574,14 +592,21 @@ class AuthViewModel: ObservableObject {
     @Published var name: String = ""
     @Published var isSignupMode: Bool = false
     
-    init() {
-        // Check if user is already logged in
-        checkAuthenticationStatus()
-    }
+    private let supabaseService = SupabaseService.shared
     
-    private func checkAuthenticationStatus() {
-        // Check UserDefaults for existing session
-        isAuthenticated = UserDefaults.standard.bool(forKey: "isAuthenticated")
+    init() {
+        // Bind to Supabase service
+        supabaseService.$isAuthenticated
+            .assign(to: &$isAuthenticated)
+        
+        supabaseService.$currentUser
+            .assign(to: &$currentUser)
+        
+        supabaseService.$isLoading
+            .assign(to: &$isLoading)
+        
+        supabaseService.$errorMessage
+            .assign(to: &$errorMessage)
     }
     
     func signInWithEmail() {
@@ -590,13 +615,14 @@ class AuthViewModel: ObservableObject {
             return
         }
         
-        isLoading = true
-        errorMessage = nil
-        
-        // Simulate authentication
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.isLoading = false
-            self.authenticateUser()
+        Task {
+            do {
+                try await supabaseService.signIn(email: email, password: password)
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
         }
     }
     
@@ -611,58 +637,31 @@ class AuthViewModel: ObservableObject {
             return
         }
         
-        isLoading = true
-        errorMessage = nil
-        
-        // Simulate signup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.isLoading = false
-            self.authenticateUser()
+        Task {
+            do {
+                try await supabaseService.signUp(email: email, password: password, name: name)
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+            }
         }
     }
     
     func signInWithApple() {
-        isLoading = true
-        errorMessage = nil
-        
-        // Simulate Apple Sign In
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.isLoading = false
-            self.authenticateUser()
-        }
+        // TODO: Implement Apple Sign In with Supabase
+        errorMessage = "Apple Sign In coming soon"
     }
     
     func signInWithGoogle() {
-        isLoading = true
-        errorMessage = nil
-        
-        // Simulate Google Sign In
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.isLoading = false
-            self.authenticateUser()
-        }
-    }
-    
-    private func authenticateUser() {
-        let user = User(
-            id: UUID().uuidString,
-            email: email.isEmpty ? "user@example.com" : email,
-            name: name.isEmpty ? "User" : name,
-            authProvider: .email,
-            createdAt: Date()
-        )
-        
-        currentUser = user
-        isAuthenticated = true
-        
-        // Save to UserDefaults
-        UserDefaults.standard.set(true, forKey: "isAuthenticated")
+        // TODO: Implement Google Sign In with Supabase
+        errorMessage = "Google Sign In coming soon"
     }
     
     func signOut() {
-        currentUser = nil
-        isAuthenticated = false
-        UserDefaults.standard.set(false, forKey: "isAuthenticated")
+        Task {
+            await supabaseService.signOut()
+        }
         
         // Clear form fields
         email = ""
@@ -733,8 +732,8 @@ class HomeViewModel: ObservableObject {
         // Load data for each enabled widget
         let enabledWidgets = widgets.filter { $0.isEnabled }
         
-        // Simulate data loading
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Simulate data loading (reduced from 500ms to 200ms)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.widgetData = WidgetData(
                 searchData: self.createSearchData(),
                 newsData: self.createNewsData(),

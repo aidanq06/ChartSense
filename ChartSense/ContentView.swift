@@ -158,11 +158,13 @@ struct MainAppView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.8), value: showingSplashScreen)
+        .animation(.easeInOut(duration: 0.6), value: showingSplashScreen)
         .onAppear {
-            // Show splash screen for 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                showingSplashScreen = false
+            // Show splash screen for 2.2 seconds to allow animations to complete
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    showingSplashScreen = false
+                }
             }
         }
         .preferredColorScheme(authViewModel.isAuthenticated ? (themeManager.isDarkMode ? .dark : .light) : .light)
@@ -173,39 +175,43 @@ struct SplashScreenView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @ObservedObject private var authViewModel = AuthViewModel.shared
     @State private var animateText = false
+    @State private var animateLogo = false
     
     var body: some View {
         ZStack {
-            // Background - Always light for splash screen
-            AppTheme.light.colors.background
+            // Background - Respects theme
+            (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
                 .ignoresSafeArea()
             
             VStack(spacing: 40) {
-                // App Icon/Logo - Clean and Simple (always light mode style)
+                // App Icon/Logo - Clean and Simple
                 Image("AppIconImage")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 100, height: 100)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .opacity(animateLogo ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.6).delay(0.1), value: animateLogo)
                 
                 // App Title
                 VStack(spacing: 12) {
                     Text("ChartSense")
                         .font(.system(size: 36, weight: .bold, design: .default))
-                        .foregroundColor(AppTheme.light.colors.primaryText)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         .opacity(animateText ? 1.0 : 0.0)
-                        .animation(.easeInOut(duration: 1.0).delay(0.3), value: animateText)
+                        .animation(.easeInOut(duration: 0.6).delay(0.3), value: animateText)
                     
                     Text("AI-Powered Stock Sentiment Analysis")
                         .font(.system(size: 16, weight: .medium, design: .default))
-                        .foregroundColor(AppTheme.light.colors.secondaryText)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                         .opacity(animateText ? 1.0 : 0.0)
-                        .animation(.easeInOut(duration: 1.0).delay(0.6), value: animateText)
+                        .animation(.easeInOut(duration: 0.6).delay(0.5), value: animateText)
                 }
             }
         }
-        .preferredColorScheme(.light) // Force light mode for splash screen
+        .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
         .onAppear {
+            animateLogo = true
             animateText = true
         }
     }

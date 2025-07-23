@@ -109,39 +109,20 @@ struct StockDetailHeader: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .frame(width: 32, height: 32)
-                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                        .cornerRadius(8)
-                }
-                
-                Spacer()
-                
-                VStack(spacing: 4) {
-                    Text(stock.symbol)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(stock.companyName)
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                // Invisible spacer for balance
-                Color.clear
+        HStack {
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     .frame(width: 32, height: 32)
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                    .cornerRadius(8)
             }
+            
+            Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(.vertical, 16)
     }
 }
 
