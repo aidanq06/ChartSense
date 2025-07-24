@@ -64,7 +64,9 @@ class SearchViewModel: ObservableObject {
     private var searchCancellable: AnyCancellable?
     
     init() {
-        popularStocks = stockService.getPopularStocks()
+        Task {
+            await loadInitialData()
+        }
         recentSearches = searchService.recentSearches
         
         // Debounced search
@@ -116,8 +118,14 @@ class SearchViewModel: ObservableObject {
         }
     }
     
-    func loadInitialData() {
-        popularStocks = stockService.getPopularStocks()
+    @MainActor
+    func loadInitialData() async {
+        do {
+            popularStocks = try await stockService.getPopularStocks()
+        } catch {
+            print("❌ Error loading popular stocks: \(error)")
+            popularStocks = []
+        }
         recentSearches = searchService.recentSearches
     }
 }
@@ -743,28 +751,53 @@ class HomeViewModel: ObservableObject {
     func loadWidgetData() {
         isLoading = true
         
-        // Load data for each enabled widget
-        let enabledWidgets = widgets.filter { $0.isEnabled }
-        
-        // Simulate data loading (reduced from 500ms to 200ms)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.widgetData = WidgetData(
-                searchData: self.createSearchData(),
-                newsData: self.createNewsData(),
-                watchlistData: self.createWatchlistData(),
-                aiData: self.createAIData(),
-                marketData: self.createMarketData(),
-                trendingData: self.createTrendingData()
-            )
-            self.isLoading = false
+        Task {
+            await loadWidgetDataAsync()
         }
     }
     
-    private func createSearchData() -> SearchWidgetData {
-        return SearchWidgetData(
-            recentSearches: ["AAPL", "TSLA", "NVDA"],
-            popularStocks: stockService.getPopularStocks()
-        )
+    @MainActor
+    private func loadWidgetDataAsync() async {
+        // Load data for each enabled widget
+        let enabledWidgets = widgets.filter { $0.isEnabled }
+        
+        do {
+            let searchData = await createSearchData()
+            let newsData = createNewsData()
+            let watchlistData = await createWatchlistData()
+            let aiData = createAIData()
+            let marketData = createMarketData()
+            let trendingData = await createTrendingData()
+            
+            self.widgetData = WidgetData(
+                searchData: searchData,
+                newsData: newsData,
+                watchlistData: watchlistData,
+                aiData: aiData,
+                marketData: marketData,
+                trendingData: trendingData
+            )
+        } catch {
+            print("❌ Error loading widget data: \(error)")
+        }
+        
+        self.isLoading = false
+    }
+    
+    private func createSearchData() async -> SearchWidgetData {
+        do {
+            let popularStocks = try await stockService.getPopularStocks()
+            return SearchWidgetData(
+                recentSearches: ["AAPL", "TSLA", "NVDA"],
+                popularStocks: popularStocks
+            )
+        } catch {
+            print("❌ Error creating search data: \(error)")
+            return SearchWidgetData(
+                recentSearches: ["AAPL", "TSLA", "NVDA"],
+                popularStocks: []
+            )
+        }
     }
     
     private func createNewsData() -> NewsWidgetData {
@@ -811,16 +844,22 @@ class HomeViewModel: ObservableObject {
         )
     }
     
-    private func createWatchlistData() -> WatchlistWidgetData {
+    private func createWatchlistData() async -> WatchlistWidgetData {
         // Use popular stocks from service for watchlist
-        let watchlistStocks = stockService.getPopularStocks().prefix(3).map { $0 }
+        do {
+            let allStocks = try await stockService.getPopularStocks()
+            let watchlistStocks = allStocks.prefix(3).map { $0 }
         
         var sentiments: [String: SentimentAnalysis] = [:]
         for stock in watchlistStocks {
             sentiments[stock.symbol] = sentimentService.getSentiment(for: stock.symbol)
         }
         
-        return WatchlistWidgetData(stocks: watchlistStocks, sentiments: sentiments)
+            return WatchlistWidgetData(stocks: watchlistStocks, sentiments: sentiments)
+        } catch {
+            print("❌ Error creating watchlist data: \(error)")
+            return WatchlistWidgetData(stocks: [], sentiments: [:])
+        }
     }
     
     private func createAIData() -> AIWidgetData {
@@ -847,11 +886,20 @@ class HomeViewModel: ObservableObject {
         )
     }
     
-    private func createTrendingData() -> TrendingWidgetData {
-        return TrendingWidgetData(
-            stocks: stockService.getPopularStocks(),
-            trends: ["AI", "Semiconductors", "EV", "Biotech"]
-        )
+    private func createTrendingData() async -> TrendingWidgetData {
+        do {
+            let stocks = try await stockService.getPopularStocks()
+            return TrendingWidgetData(
+                stocks: stocks,
+                trends: ["AI", "Semiconductors", "EV", "Biotech"]
+            )
+        } catch {
+            print("❌ Error creating trending data: \(error)")
+            return TrendingWidgetData(
+                stocks: [],
+                trends: ["AI", "Semiconductors", "EV", "Biotech"]
+            )
+        }
     }
     
     func saveWidgetConfiguration() {

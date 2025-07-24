@@ -31,11 +31,11 @@ struct Config {
     }()
     
     // MARK: - Financial API Keys
-    static let alphaVantageAPIKey: String = {
-        if let key = ProcessInfo.processInfo.environment["ALPHA_VANTAGE_API_KEY"] {
+    static let finnhubAPIKey: String = {
+        if let key = ProcessInfo.processInfo.environment["FINNHUB_API_KEY"] {
             return key
         }
-        return loadFromConfigFile(key: "ALPHA_VANTAGE_API_KEY") ?? ""
+        return loadFromConfigFile(key: "FINNHUB_API_KEY") ?? ""
     }()
     
     static let openAIAPIKey: String = {
@@ -122,7 +122,6 @@ struct Config {
         print("📱 App: \(appName) v\(appVersion) (\(buildNumber))")
         print("🔗 Supabase URL: \(supabaseURL.prefix(20))...")
         print("🔑 Supabase Key: \(supabaseAnonKey.prefix(10))...")
-        print("📊 Alpha Vantage: \(alphaVantageAPIKey.isEmpty ? "Not configured" : "Configured")")
         print("🤖 OpenAI: \(openAIAPIKey.isEmpty ? "Not configured" : "Configured")")
     }
 }

@@ -16,21 +16,12 @@ class StockService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
+    private let stockDataService = StockDataService.shared
+    
     private init() {}
     
-    // Mock stock data for popular stocks
-    private let mockStocks: [String: Stock] = [
-        "AAPL": Stock(symbol: "AAPL", companyName: "Apple Inc.", currentPrice: 178.85, dailyChange: 2.45, dailyChangePercent: 1.39, marketCap: 2.8e12, volume: 45_678_923, peRatio: 29.2),
-        "TSLA": Stock(symbol: "TSLA", companyName: "Tesla, Inc.", currentPrice: 248.75, dailyChange: -4.20, dailyChangePercent: -1.66, marketCap: 7.9e11, volume: 89_234_567, peRatio: 45.8),
-        "GOOGL": Stock(symbol: "GOOGL", companyName: "Alphabet Inc.", currentPrice: 142.65, dailyChange: 1.85, dailyChangePercent: 1.31, marketCap: 1.8e12, volume: 23_456_789, peRatio: 24.1),
-        "MSFT": Stock(symbol: "MSFT", companyName: "Microsoft Corporation", currentPrice: 420.15, dailyChange: 5.60, dailyChangePercent: 1.35, marketCap: 3.1e12, volume: 34_567_890, peRatio: 32.7),
-        "AMZN": Stock(symbol: "AMZN", companyName: "Amazon.com, Inc.", currentPrice: 156.92, dailyChange: -2.38, dailyChangePercent: -1.49, marketCap: 1.6e12, volume: 56_789_012, peRatio: 45.2),
-        "NVDA": Stock(symbol: "NVDA", companyName: "NVIDIA Corporation", currentPrice: 875.30, dailyChange: 18.45, dailyChangePercent: 2.15, marketCap: 2.2e12, volume: 67_890_123, peRatio: 65.4),
-        "META": Stock(symbol: "META", companyName: "Meta Platforms, Inc.", currentPrice: 485.20, dailyChange: -8.75, dailyChangePercent: -1.77, marketCap: 1.2e12, volume: 45_123_456, peRatio: 22.8),
-        "NFLX": Stock(symbol: "NFLX", companyName: "Netflix, Inc.", currentPrice: 642.50, dailyChange: 12.30, dailyChangePercent: 1.95, marketCap: 2.8e11, volume: 12_345_678, peRatio: 35.6),
-        "SPY": Stock(symbol: "SPY", companyName: "SPDR S&P 500 ETF Trust", currentPrice: 456.78, dailyChange: 1.23, dailyChangePercent: 0.27, volume: 78_901_234),
-        "QQQ": Stock(symbol: "QQQ", companyName: "Invesco QQQ Trust", currentPrice: 389.45, dailyChange: 2.67, dailyChangePercent: 0.69, volume: 45_678_901)
-    ]
+    // Popular stock symbols for quick access (reduced to avoid rate limits)
+    private let popularSymbols = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
     
     func searchStock(symbol: String) async {
         await MainActor.run {
@@ -38,46 +29,34 @@ class StockService: ObservableObject {
             errorMessage = nil
         }
         
-        // Simulate network delay (reduced from 500ms to 100ms)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        
-        await MainActor.run {
-            if let stock = mockStocks[symbol.uppercased()] {
-                currentStock = stock
-            } else {
-                // Generate random stock data for unknown symbols
-                let price = Double.random(in: 10...500)
-                let change = Double.random(in: -20...20)
-                let changePercent = (change / price) * 100
-                
-                currentStock = Stock(
-                    symbol: symbol.uppercased(),
-                    companyName: "\(symbol.uppercased()) Corporation",
-                    currentPrice: price,
-                    dailyChange: change,
-                    dailyChangePercent: changePercent,
-                    marketCap: Double.random(in: 1e9...1e12),
-                    volume: Int64.random(in: 1_000_000...100_000_000),
-                    peRatio: Double.random(in: 10...80)
-                )
+        do {
+            let stock = try await stockDataService.fetchStockData(symbol: symbol)
+            
+            await MainActor.run {
+                self.currentStock = stock
+                self.isLoading = false
             }
-            isLoading = false
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.localizedDescription
+                self.isLoading = false
+            }
+            print("❌ Error fetching stock data: \(error)")
         }
     }
     
-    func getPopularStocks() -> [Stock] {
-        return Array(mockStocks.values).sorted { $0.symbol < $1.symbol }
+    func getPopularStocks() async -> [Stock] {
+        do {
+            return try await stockDataService.fetchMultipleStocks(symbols: popularSymbols)
+        } catch {
+            print("❌ Error fetching popular stocks: \(error)")
+            return []
+        }
     }
     
     func updateStockPrices() {
-        // Simulate real-time price updates
-        for (_, stock) in mockStocks {
-            let priceChange = Double.random(in: -0.5...0.5)
-            stock.currentPrice += priceChange
-            stock.dailyChange += priceChange
-            stock.dailyChangePercent = (stock.dailyChange / (stock.currentPrice - stock.dailyChange)) * 100
-            stock.lastUpdated = Date()
-        }
+        // This will be implemented with real-time updates later
+        print("🔄 Real-time updates will be implemented in Phase 2")
     }
 }
 
@@ -448,14 +427,18 @@ class SearchService: ObservableObject {
             isLoading = true
         }
         
-        // Simulate search delay (reduced from 300ms to 100ms)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        
-        await MainActor.run {
-            if query.isEmpty {
+        if query.isEmpty {
+            await MainActor.run {
                 searchResults = []
-            } else {
-                let allStocks = StockService.shared.getPopularStocks()
+                isLoading = false
+            }
+            return
+        }
+        
+        do {
+            let allStocks = try await StockService.shared.getPopularStocks()
+            
+            await MainActor.run {
                 searchResults = allStocks.filter {
                     $0.symbol.localizedCaseInsensitiveContains(query) ||
                     $0.companyName.localizedCaseInsensitiveContains(query)
@@ -463,8 +446,14 @@ class SearchService: ObservableObject {
                 
                 // Add query to recent searches
                 addToRecentSearches(query.uppercased())
+                isLoading = false
             }
-            isLoading = false
+        } catch {
+            await MainActor.run {
+                searchResults = []
+                isLoading = false
+            }
+            print("❌ Error fetching stocks for search: \(error)")
         }
     }
     

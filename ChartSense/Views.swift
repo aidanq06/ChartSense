@@ -46,7 +46,9 @@ struct DiscoverView: View {
         }
         .onAppear {
             // Load initial data
-            searchViewModel.loadInitialData()
+            Task {
+                await searchViewModel.loadInitialData()
+            }
         }
     }
 }
