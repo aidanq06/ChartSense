@@ -14,6 +14,11 @@ class PremiumManager: ObservableObject {
     @Published var aiMessagesRemaining: Int = 5
     @Published var aiMessagesUsedToday: Int = 0
     @Published var lastMessageResetDate: Date = Date()
+    
+    // Image Analysis Tracking
+    @Published var imageAnalysisRemaining: Int = 1
+    @Published var imageAnalysisUsedToday: Int = 0
+    @Published var lastImageAnalysisResetDate: Date = Date()
     @Published var showingPremiumUpgrade: Bool = false
     @Published var isLoading: Bool = false
     
@@ -22,50 +27,29 @@ class PremiumManager: ObservableObject {
         PremiumFeature(
             id: "unlimited_ai",
             title: "Unlimited AI Messages",
-            description: "Chat with AI as much as you want",
+            description: "Chat with AI assistant without daily limits",
             icon: "brain.head.profile",
-            isEnabled: false
-        ),
-        PremiumFeature(
-            id: "advanced_charts",
-            title: "Advanced Charts",
-            description: "Professional charting tools and indicators",
-            icon: "chart.line.uptrend.xyaxis",
             isEnabled: false
         ),
         PremiumFeature(
             id: "real_time_alerts",
             title: "Real-time Price Alerts",
-            description: "Instant notifications for price movements",
+            description: "Get instant notifications for price movements",
             icon: "bell.badge",
             isEnabled: false
         ),
         PremiumFeature(
-            id: "portfolio_analytics",
-            title: "Portfolio Analytics",
-            description: "Advanced portfolio analysis and insights",
-            icon: "chart.pie",
+            id: "advanced_charts",
+            title: "Advanced Charts",
+            description: "Access to professional charting tools",
+            icon: "chart.line.uptrend.xyaxis",
             isEnabled: false
         ),
         PremiumFeature(
             id: "image_analysis",
-            title: "Image Analysis",
-            description: "Analyze charts and graphs from photos",
+            title: "Unlimited Image Analysis",
+            description: "Analyze charts and graphs without daily limits",
             icon: "camera.viewfinder",
-            isEnabled: false
-        ),
-        PremiumFeature(
-            id: "export_data",
-            title: "Data Export",
-            description: "Export your data and analysis",
-            icon: "square.and.arrow.up",
-            isEnabled: false
-        ),
-        PremiumFeature(
-            id: "priority_support",
-            title: "Priority Support",
-            description: "Get help faster with priority support",
-            icon: "message.circle",
             isEnabled: false
         )
     ]
@@ -75,7 +59,7 @@ class PremiumManager: ObservableObject {
         SubscriptionPlan(
             id: "monthly",
             title: "Monthly",
-            price: "$9.99",
+            price: "$4.99",
             period: "month",
             description: "Perfect for trying out premium features",
             isPopular: false,
@@ -84,20 +68,20 @@ class PremiumManager: ObservableObject {
         SubscriptionPlan(
             id: "yearly",
             title: "Yearly",
-            price: "$99.99",
+            price: "$49.99",
             period: "year",
-            description: "Best value - save 17%",
+            description: "Best value for long-term users",
             isPopular: true,
-            savings: "17%"
+            savings: "Save 17%"
         ),
         SubscriptionPlan(
             id: "lifetime",
             title: "Lifetime",
-            price: "$299.99",
+            price: "$99.99",
             period: "one-time",
-            description: "Pay once, use forever",
+            description: "One-time payment, forever access",
             isPopular: false,
-            savings: "75%"
+            savings: "Save 83%"
         )
     ]
     
@@ -106,6 +90,7 @@ class PremiumManager: ObservableObject {
     
     private init() {
         loadSubscriptionStatus()
+        loadImageAnalysisCount()
         setupMessageResetTimer()
         updatePremiumFeatures()
     }
@@ -130,6 +115,31 @@ class PremiumManager: ObservableObject {
             aiMessagesRemaining -= 1
             aiMessagesUsedToday += 1
             saveMessageCount()
+            return true
+        }
+        
+        showingPremiumUpgrade = true
+        return false
+    }
+    
+    /// Check if user can perform image analysis
+    func canPerformImageAnalysis() -> Bool {
+        if isPremium {
+            return true
+        }
+        return imageAnalysisRemaining > 0
+    }
+    
+    /// Use image analysis (decrement counter for free users)
+    func useImageAnalysis() -> Bool {
+        if isPremium {
+            return true
+        }
+        
+        if imageAnalysisRemaining > 0 {
+            imageAnalysisRemaining -= 1
+            imageAnalysisUsedToday += 1
+            saveImageAnalysisCount()
             return true
         }
         
@@ -233,6 +243,9 @@ class PremiumManager: ObservableObject {
         if !calendar.isDate(lastMessageResetDate, inSameDayAs: Date()) {
             resetDailyMessageCount()
         }
+        if !calendar.isDate(lastImageAnalysisResetDate, inSameDayAs: Date()) {
+            resetImageAnalysisCount()
+        }
     }
     
     private func resetDailyMessageCount() {
@@ -278,6 +291,42 @@ class PremiumManager: ObservableObject {
         if let dateData = try? JSONEncoder().encode(lastMessageResetDate) {
             userDefaults.set(dateData, forKey: "lastMessageResetDate")
         }
+    }
+    
+    private func saveImageAnalysisCount() {
+        userDefaults.set(imageAnalysisRemaining, forKey: "imageAnalysisRemaining")
+        userDefaults.set(imageAnalysisUsedToday, forKey: "imageAnalysisUsedToday")
+        
+        if let dateData = try? JSONEncoder().encode(lastImageAnalysisResetDate) {
+            userDefaults.set(dateData, forKey: "lastImageAnalysisResetDate")
+        }
+    }
+    
+    private func loadImageAnalysisCount() {
+        imageAnalysisRemaining = userDefaults.integer(forKey: "imageAnalysisRemaining")
+        imageAnalysisUsedToday = userDefaults.integer(forKey: "imageAnalysisUsedToday")
+        
+        if imageAnalysisRemaining == 0 {
+            imageAnalysisRemaining = 1 // Default for new users
+        }
+        
+        if let dateData = userDefaults.data(forKey: "lastImageAnalysisResetDate"),
+           let date = try? JSONDecoder().decode(Date.self, from: dateData) {
+            lastImageAnalysisResetDate = date
+        }
+        
+        // Check if we need to reset daily count
+        if !Calendar.current.isDate(lastImageAnalysisResetDate, inSameDayAs: Date()) {
+            resetImageAnalysisCount()
+        }
+    }
+    
+    private func resetImageAnalysisCount() {
+        imageAnalysisRemaining = 1
+        imageAnalysisUsedToday = 0
+        lastImageAnalysisResetDate = Date()
+        saveImageAnalysisCount()
+        print("🔄 Daily image analysis count reset")
     }
 }
 

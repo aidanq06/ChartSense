@@ -869,7 +869,7 @@ struct TemporaryPremiumResetSection: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Section Header
+            // Section Heading
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 16, weight: .medium))
@@ -935,6 +935,9 @@ struct TemporaryPremiumResetSection: View {
         premiumManager.aiMessagesRemaining = 5
         premiumManager.aiMessagesUsedToday = 0
         premiumManager.lastMessageResetDate = Date()
+        premiumManager.imageAnalysisRemaining = 1
+        premiumManager.imageAnalysisUsedToday = 0
+        premiumManager.lastImageAnalysisResetDate = Date()
         
         // Clear UserDefaults
         UserDefaults.standard.removeObject(forKey: "isPremium")
@@ -942,6 +945,9 @@ struct TemporaryPremiumResetSection: View {
         UserDefaults.standard.removeObject(forKey: "aiMessagesRemaining")
         UserDefaults.standard.removeObject(forKey: "aiMessagesUsedToday")
         UserDefaults.standard.removeObject(forKey: "lastMessageResetDate")
+        UserDefaults.standard.removeObject(forKey: "imageAnalysisRemaining")
+        UserDefaults.standard.removeObject(forKey: "imageAnalysisUsedToday")
+        UserDefaults.standard.removeObject(forKey: "lastImageAnalysisResetDate")
         
         print("🔄 Premium status reset to free user")
     }

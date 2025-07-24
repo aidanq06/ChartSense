@@ -29,14 +29,11 @@ struct DiscoverView: View {
         }
         .sheet(isPresented: $showingStockDetail) {
             if let selectedStock = appViewModel.selectedStock {
-                StockDetailSheet(
-                    stock: selectedStock,
-                    sentimentViewModel: sentimentViewModel,
-                    onDismiss: {
+                ModernStockDetailView(stock: selectedStock)
+                    .onDisappear {
                         appViewModel.selectedStock = nil
                         showingStockDetail = false
                     }
-                )
             }
         }
         .onReceive(appViewModel.$selectedStock) { stock in

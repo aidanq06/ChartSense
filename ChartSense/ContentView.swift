@@ -39,7 +39,7 @@ struct ContentView: View {
                                     .environmentObject(appViewModel)
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             case 3:
-                                WatchlistView()
+                                ModernWatchlistView()
                                     .environmentObject(appViewModel)
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
                             case 4:
