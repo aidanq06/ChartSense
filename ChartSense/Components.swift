@@ -302,6 +302,63 @@ struct StockQuoteCard: View {
     }
 }
 
+struct StockQuoteCardSkeleton: View {
+    @Environment(\.theme) private var theme
+    
+    var body: some View {
+        NotionCard {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.colors.tertiaryBackground)
+                            .frame(width: 80, height: 24)
+                            .shimmer()
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.colors.tertiaryBackground)
+                            .frame(width: 120, height: 16)
+                            .shimmer()
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: theme.spacing.xs) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.colors.tertiaryBackground)
+                            .frame(width: 100, height: 32)
+                            .shimmer()
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.colors.tertiaryBackground)
+                            .frame(width: 80, height: 16)
+                            .shimmer()
+                    }
+                }
+                
+                Divider()
+                    .background(theme.colors.divider)
+                
+                HStack(spacing: theme.spacing.lg) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 4) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.colors.tertiaryBackground)
+                                .frame(width: 60, height: 12)
+                                .shimmer()
+                            
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(theme.colors.tertiaryBackground)
+                                .frame(width: 80, height: 16)
+                                .shimmer()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct AnalystConsensusCard: View {
     let consensus: AnalystConsensus
     @Environment(\.theme) private var theme
@@ -1080,7 +1137,7 @@ struct SearchWidget: View {
                                 
                                 Text(stock.formattedPrice)
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                                    .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -1173,7 +1230,7 @@ struct WatchlistWidget: View {
                             HStack(spacing: 4) {
                                 Text(stock.formattedChange)
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                                    .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                             
                                 // Sentiment indicator
                                 if let sentiment = data.sentiments[stock.symbol] {
@@ -1265,11 +1322,11 @@ struct MarketOverviewWidget: View {
                         HStack(spacing: 4) {
                             Text(String(format: "%.2f", index.change))
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(index.change >= 0 ? .green : .red)
+                                .foregroundColor(index.change >= 0 ? Color.bullish : Color.bearish)
                             
                             Text(String(format: "(%.2f%%)", index.changePercent))
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(index.change >= 0 ? .green : .red)
+                                .foregroundColor(index.change >= 0 ? Color.bullish : Color.bearish)
                         }
                     }
                 }
@@ -1315,12 +1372,238 @@ struct TrendingStocksWidget: View {
                             
                             Text(stock.formattedPrice)
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                                .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                         }
                         .frame(maxWidth: .infinity)
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Loading and State Components
+
+struct LoadingSkeleton: View {
+    let lines: Int
+    let lineHeight: CGFloat
+    let spacing: CGFloat
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    init(lines: Int = 3, lineHeight: CGFloat = 12, spacing: CGFloat = 8) {
+        self.lines = lines
+        self.lineHeight = lineHeight
+        self.spacing = spacing
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(0..<lines, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .frame(height: lineHeight)
+                    .frame(maxWidth: index == lines - 1 ? 0.6 : 1.0, alignment: .leading)
+                    .shimmer()
+            }
+        }
+    }
+}
+
+struct ShimmerModifier: ViewModifier {
+    @State private var phase: CGFloat = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.clear,
+                        Color.white.opacity(0.3),
+                        Color.clear
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .offset(x: -200 + 400 * phase)
+                .animation(
+                    Animation.linear(duration: 1.5)
+                        .repeatForever(autoreverses: false),
+                    value: phase
+                )
+            )
+            .onAppear {
+                phase = 1
+            }
+    }
+}
+
+extension View {
+    func shimmer() -> some View {
+        modifier(ShimmerModifier())
+    }
+}
+
+struct StockErrorView: View {
+    let error: String
+    let retryAction: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.warning : AppTheme.light.colors.warning)
+            
+            Text("Oops! Something went wrong")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            
+            Text(error)
+                .font(.body)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            
+            Button(action: retryAction) {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Try Again")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                .cornerRadius(8)
+            }
+        }
+        .padding(32)
+    }
+}
+
+struct EmptyStateView: View {
+    let icon: String
+    let title: String
+    let message: String
+    let actionTitle: String?
+    let action: (() -> Void)?
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    init(icon: String, title: String, message: String, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+        self.icon = icon
+        self.title = title
+        self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            
+            Text(title)
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            
+            Text(message)
+                .font(.body)
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            
+            if let actionTitle = actionTitle, let action = action {
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .cornerRadius(8)
+                }
+            }
+        }
+        .padding(32)
+    }
+}
+
+// MARK: - Real-time Price Components
+
+struct RealTimePriceView: View {
+    let stock: Stock
+    @StateObject private var webSocketService = WebSocketService.shared
+    @State private var isAnimating = false
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(stock.formattedRealTimePrice)
+                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .foregroundColor(stock.hasRealTimeUpdate ? .green : .primary)
+                .scaleEffect(isAnimating ? 1.1 : 1.0)
+                .animation(.easeInOut(duration: 0.3), value: isAnimating)
+            
+            if stock.hasRealTimeUpdate {
+                Image(systemName: "livephoto")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
+                    .opacity(isAnimating ? 1.0 : 0.7)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isAnimating)
+            }
+        }
+        .onAppear {
+            isAnimating = true
+        }
+        .onChange(of: stock.realTimePrice) { _ in
+            // Trigger animation when price updates
+            isAnimating = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isAnimating = true
+            }
+        }
+    }
+}
+
+struct ConnectionStatusView: View {
+    @StateObject private var webSocketService = WebSocketService.shared
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(connectionColor)
+                .frame(width: 8, height: 8)
+            
+            Text(connectionText)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private var connectionColor: Color {
+        switch webSocketService.connectionStatus {
+        case .connected:
+            return .green
+        case .connecting:
+            return .orange
+        case .disconnected, .error:
+            return .red
+        }
+    }
+    
+    private var connectionText: String {
+        switch webSocketService.connectionStatus {
+        case .connected:
+            return "Live"
+        case .connecting:
+            return "Connecting..."
+        case .disconnected:
+            return "Offline"
+        case .error(let message):
+            return "Error: \(message)"
         }
     }
 }
@@ -1356,16 +1639,16 @@ struct StockOverviewCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
                             .font(.caption)
-                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                         
                         Text(stock.formattedChange)
                             .font(.body)
                             .fontWeight(.medium)
-                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                         
                         Text("(\(stock.formattedChangePercent))")
                             .font(.caption)
-                            .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                     }
                 }
             }

@@ -1,17 +1,6 @@
 import Foundation
 import Combine
 
-// MARK: - Async Sequence Extensions
-extension Sequence {
-    func asyncMap<T>(_ transform: (Element) async throws -> T) async rethrows -> [T] {
-        var results = [T]()
-        for element in self {
-            results.append(try await transform(element))
-        }
-        return results
-    }
-}
-
 // MARK: - Stock Data Service
 class StockDataService: ObservableObject {
     static let shared = StockDataService()
@@ -22,13 +11,18 @@ class StockDataService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    // Simple cache for stock data
+    // Enhanced cache for stock data
     private var stockCache: [String: (data: Stock, timestamp: Date)] = [:]
-    private let cacheValidityDuration: TimeInterval = 30 // 30 seconds
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes for better performance
+    
+    // Cache statistics
+    private var cacheHits = 0
+    private var cacheMisses = 0
     
     private init() {
         print("📈 Initializing StockDataService...")
         validateAPIKey()
+        startBackgroundRefresh()
     }
     
     private func validateAPIKey() {
@@ -73,7 +67,7 @@ class StockDataService: ObservableObject {
         var stocks: [Stock] = []
         
         // Use TaskGroup for concurrent requests with rate limiting
-        try await withThrowingTaskGroup(of: Stock.self) { group in
+        try await withThrowingTaskGroup(of: (Int, Stock).self) { group in
             // Add tasks with staggered start times to avoid rate limits
             for (index, symbol) in symbols.enumerated() {
                 group.addTask {
@@ -84,14 +78,18 @@ class StockDataService: ObservableObject {
                     
                     let stock = try await self.fetchStockData(symbol: symbol)
                     print("✅ Successfully fetched \(symbol)")
-                    return stock
+                    return (index, stock)
                 }
             }
             
-            // Collect results in order
-            for try await stock in group {
-                stocks.append(stock)
+            // Collect results
+            var results: [(Int, Stock)] = []
+            for try await result in group {
+                results.append(result)
             }
+            
+            // Sort by index and extract stocks
+            stocks = results.sorted { $0.0 < $1.0 }.map { $0.1 }
         }
         
         return stocks
@@ -150,14 +148,21 @@ class StockDataService: ObservableObject {
     }
     
     private func getCachedStockData(for symbol: String) -> Stock? {
-        guard let cached = stockCache[symbol.uppercased()] else { return nil }
+        guard let cached = stockCache[symbol.uppercased()] else { 
+            cacheMisses += 1
+            return nil 
+        }
         
         let age = Date().timeIntervalSince(cached.timestamp)
         if age < cacheValidityDuration {
+            cacheHits += 1
+            print("📦 Cache HIT for \(symbol) (age: \(Int(age))s)")
             return cached.data
         } else {
             // Remove expired cache
             stockCache.removeValue(forKey: symbol.uppercased())
+            cacheMisses += 1
+            print("📦 Cache MISS for \(symbol) (expired: \(Int(age))s)")
             return nil
         }
     }
@@ -165,6 +170,65 @@ class StockDataService: ObservableObject {
     private func cacheStockData(_ stock: Stock, for symbol: String) {
         stockCache[symbol.uppercased()] = (data: stock, timestamp: Date())
         print("💾 Cached data for \(symbol)")
+    }
+    
+
+    
+    // MARK: - Background Refresh
+    
+    private func startBackgroundRefresh() {
+        // Refresh popular stocks every 5 minutes in background
+        Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+            Task {
+                await self.refreshPopularStocksInBackground()
+            }
+        }
+    }
+    
+    private func refreshPopularStocksInBackground() async {
+        print("🔄 Background refresh started")
+        let popularSymbols = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
+        
+        do {
+            _ = try await fetchMultipleStocks(symbols: popularSymbols)
+            print("✅ Background refresh completed")
+        } catch {
+            print("❌ Background refresh failed: \(error)")
+        }
+    }
+    
+    // MARK: - Cache Statistics
+    
+    func getCacheStatistics() -> (hits: Int, misses: Int, hitRate: Double) {
+        let total = cacheHits + cacheMisses
+        let hitRate = total > 0 ? Double(cacheHits) / Double(total) : 0.0
+        return (hits: cacheHits, misses: cacheMisses, hitRate: hitRate)
+    }
+    
+    func clearCache() {
+        stockCache.removeAll()
+        cacheHits = 0
+        cacheMisses = 0
+        print("🗑️ Cache cleared")
+    }
+    
+    // MARK: - Cache Warming
+    
+    func warmCache() async {
+        print("🔥 Warming cache with popular stocks...")
+        let popularSymbols = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
+        
+        do {
+            _ = try await fetchMultipleStocks(symbols: popularSymbols)
+            print("🔥 Cache warming completed")
+        } catch {
+            print("❌ Cache warming failed: \(error)")
+        }
+    }
+    
+    func getCacheInfo() -> String {
+        let stats = getCacheStatistics()
+        return "Cache: \(stockCache.count) items, \(Int(stats.hitRate * 100))% hit rate (\(stats.hits)/\(stats.hits + stats.misses))"
     }
 }
 

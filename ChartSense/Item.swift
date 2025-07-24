@@ -69,6 +69,22 @@ final class Stock {
         return dailyChange >= 0
     }
     
+    // Real-time price support
+    var realTimePrice: Double? {
+        return WebSocketService.shared.getRealTimePrice(for: symbol)
+    }
+    
+    var hasRealTimeUpdate: Bool {
+        return WebSocketService.shared.isPriceUpdated(for: symbol)
+    }
+    
+    var formattedRealTimePrice: String {
+        if let realTimePrice = realTimePrice {
+            return String(format: "$%.2f", realTimePrice)
+        }
+        return formattedPrice
+    }
+    
     private func formatLargeNumber(_ number: Double) -> String {
         if number >= 1e12 {
             return String(format: "%.1fT", number / 1e12)

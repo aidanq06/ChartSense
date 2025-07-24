@@ -29,7 +29,7 @@ struct AnalystConsensusDetailCard: View {
             
             // Ratings
             HStack(spacing: 20) {
-                ConsensusDetailItem(title: "Buy", percentage: Double(consensus.strongBuyPercentage), color: .green)
+                ConsensusDetailItem(title: "Buy", percentage: Double(consensus.strongBuyPercentage), color: Color.bullish)
                 ConsensusDetailItem(title: "Hold", percentage: Double(consensus.holdPercentage), color: .orange)
                 ConsensusDetailItem(title: "Sell", percentage: Double(consensus.sellPercentage), color: .red)
             }

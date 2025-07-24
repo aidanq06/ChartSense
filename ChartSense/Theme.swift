@@ -8,6 +8,45 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Color Extensions
+extension Color {
+    static var bullish: Color {
+        ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.bullish : AppTheme.light.colors.bullish
+    }
+    
+    static var bearish: Color {
+        ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.bearish : AppTheme.light.colors.bearish
+    }
+    
+    // Support for string-based color names used in sentiment analysis
+    init(_ colorName: String) {
+        switch colorName.lowercased() {
+        case "green":
+            self = Color.bullish
+        case "red":
+            self = Color.bearish
+        case "lightgreen":
+            self = Color.bullish.opacity(0.7)
+        case "orange":
+            self = Color.orange
+        case "blue":
+            self = Color.blue
+        case "purple":
+            self = Color.purple
+        case "indigo":
+            self = Color.indigo
+        case "cyan":
+            self = Color.cyan
+        case "brown":
+            self = Color.brown
+        case "gray":
+            self = Color.gray
+        default:
+            self = Color.gray
+        }
+    }
+}
+
 // MARK: - Theme Manager
 class ThemeManager: ObservableObject {
     @Published var isDarkMode: Bool {

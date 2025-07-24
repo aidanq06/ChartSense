@@ -32,6 +32,8 @@ struct ChartSenseApp: App {
                 .onAppear {
                     setupAppearance()
                     validateConfiguration()
+                    warmCache()
+                    startRealTimeUpdates()
                 }
         }
     }
@@ -88,6 +90,21 @@ struct ChartSenseApp: App {
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().compactAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
+    }
+    
+    private func warmCache() {
+        Task {
+            await StockDataService.shared.warmCache()
+        }
+    }
+    
+    private func startRealTimeUpdates() {
+        // Start WebSocket connection for real-time updates
+        WebSocketService.shared.startConnection()
+        
+        // Subscribe to popular stocks
+        let popularSymbols = ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]
+        WebSocketService.shared.subscribeToSymbols(popularSymbols)
     }
 }
 

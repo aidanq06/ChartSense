@@ -257,6 +257,7 @@ struct SearchView: View {
                             
                             PopularStocksSection(
                                 stocks: viewModel.popularStocks,
+                                isLoading: viewModel.isLoading,
                                 onSelect: { stock in
                                     appViewModel.selectStock(stock)
                                 }
@@ -325,18 +326,41 @@ struct RecentSearchesSection: View {
 
 struct PopularStocksSection: View {
     let stocks: [Stock]
+    let isLoading: Bool
     let onSelect: (Stock) -> Void
     @StateObject private var themeManager = ThemeManager.shared
+    
+    init(stocks: [Stock], isLoading: Bool = false, onSelect: @escaping (Stock) -> Void) {
+        self.stocks = stocks
+        self.isLoading = isLoading
+        self.onSelect = onSelect
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SectionHeader(title: "Popular Stocks", count: nil)
             
-            ForEach(stocks, id: \.symbol) { stock in
-                Button(action: { onSelect(stock) }) {
-                    StockListRow(stock: stock)
+            if isLoading {
+                ForEach(0..<5, id: \.self) { _ in
+                    StockListRowSkeleton()
                 }
-                .buttonStyle(PlainButtonStyle())
+            } else if stocks.isEmpty {
+                EmptyStateView(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "No Popular Stocks",
+                    message: "Popular stocks will appear here once loaded.",
+                    actionTitle: "Refresh",
+                    action: {
+                        // This would trigger a refresh
+                    }
+                )
+            } else {
+                ForEach(stocks, id: \.symbol) { stock in
+                    Button(action: { onSelect(stock) }) {
+                        StockListRow(stock: stock)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
             }
         }
     }
@@ -1853,22 +1877,30 @@ struct StockListRow: View {
             
             // Price Info
             VStack(alignment: .trailing, spacing: 4) {
-                Text(stock.formattedPrice)
-                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                HStack(spacing: 4) {
+                    Text(stock.formattedRealTimePrice)
+                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                        .foregroundColor(stock.hasRealTimeUpdate ? .green : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
+                    
+                    if stock.hasRealTimeUpdate {
+                        Image(systemName: "livephoto")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.green)
+                    }
+                }
                 
                 HStack(spacing: 4) {
                     Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                     
                     Text(stock.formattedChange)
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                     
                     Text("(\(String(format: "%.2f%%", stock.dailyChangePercent)))")
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(stock.dailyChange >= 0 ? .green : .red)
+                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                 }
             }
         }
@@ -1884,6 +1916,56 @@ struct StockListRow: View {
             radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
             x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
             y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+        )
+    }
+}
+
+struct StockListRowSkeleton: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            // Stock Info skeleton
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .frame(width: 60, height: 16)
+                    .shimmer()
+                
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .frame(width: 120, height: 14)
+                    .shimmer()
+            }
+            
+            Spacer()
+            
+            // Price Info skeleton
+            VStack(alignment: .trailing, spacing: 4) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .frame(width: 80, height: 16)
+                    .shimmer()
+                
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                        .frame(width: 60, height: 13)
+                        .shimmer()
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                        .frame(width: 70, height: 12)
+                        .shimmer()
+                }
+            }
+        }
+        .padding(16)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
         )
     }
 }
