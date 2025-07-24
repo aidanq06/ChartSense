@@ -426,25 +426,31 @@ final class WatchlistItem {
 }
 
 // MARK: - AI Chat Models
-struct ChatMessage: Identifiable, Codable {
+struct ChatMessage: Identifiable, Codable, Equatable {
     let id = UUID()
     let content: String
     let isUser: Bool
     let timestamp: Date
-    let messageType: MessageType
+    let status: MessageStatus
     
-    enum MessageType: String, Codable {
-        case text = "text"
-        case suggestion = "suggestion"
+    enum MessageStatus: String, Codable {
+        case sending = "sending"
+        case sent = "sent"
         case error = "error"
-        case loading = "loading"
+        
+        var errorMessage: String? {
+            switch self {
+            case .error: return "Failed to send message"
+            default: return nil
+            }
+        }
     }
     
-    init(content: String, isUser: Bool, messageType: MessageType = .text) {
+    init(content: String, isUser: Bool, status: MessageStatus = .sent) {
         self.content = content
         self.isUser = isUser
         self.timestamp = Date()
-        self.messageType = messageType
+        self.status = status
     }
 }
 

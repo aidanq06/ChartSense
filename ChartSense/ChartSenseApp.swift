@@ -173,7 +173,7 @@ class AppStateManager: ObservableObject {
         userDefaults.set(false, forKey: "newsAlertsEnabled")
         userDefaults.set(true, forKey: "marketOpenAlerts")
         userDefaults.set("5 minutes", forKey: "refreshInterval")
-        userDefaults.set("Search", forKey: "defaultView")
+
         
         // Show onboarding or welcome screen
         // This could be implemented as a separate view

@@ -721,7 +721,6 @@ struct UserPreferences: Codable {
     let priceAlertsEnabled: Bool
     let newsAlertsEnabled: Bool
     let refreshInterval: String
-    let defaultView: String
 }
 
 // MARK: - Apple Sign In Delegate
