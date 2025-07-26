@@ -64,8 +64,8 @@ struct ModernStockDetailView: View {
     }
 }
 
-// MARK: - Animated Price Text Component
-struct AnimatedPriceText: View {
+// MARK: - Simple Smooth Price Transition
+struct SmoothPriceTransition: View {
     let price: Double
     let isAnimating: Bool
     @State private var displayPrice: Double
@@ -78,9 +78,11 @@ struct AnimatedPriceText: View {
     
     var body: some View {
         Text(String(format: "%.2f", displayPrice))
+            .font(.system(size: 32, weight: .semibold, design: .monospaced))
+            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
             .onChange(of: price) { newPrice in
                 if isAnimating {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
                         displayPrice = newPrice
                     }
                 } else {
@@ -93,10 +95,14 @@ struct AnimatedPriceText: View {
                 }
             }
     }
+    
+    private var themeManager: ThemeManager {
+        return ThemeManager.shared
+    }
 }
 
-// MARK: - Animated Change Text Component
-struct AnimatedChangeText: View {
+// MARK: - Simple Smooth Change Text
+struct SmoothChangeText: View {
     let change: Double
     let percent: Double
     let isPositive: Bool
@@ -114,35 +120,89 @@ struct AnimatedChangeText: View {
     }
     
     var body: some View {
-        Text("\(isPositive ? "+" : "")\(String(format: "%.2f", displayChange)) (\(isPositive ? "+" : "")\(String(format: "%.2f", displayPercent))%)")
-            .onChange(of: change) { newChange in
-                if isAnimating {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        displayChange = newChange
-                        displayPercent = percent
-                    }
-                } else {
+        HStack(spacing: 0) {
+            Text(isPositive ? "+" : "")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+            
+            Text(String(format: "%.2f", displayChange))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+            
+            Text(" (")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+            
+            Text(isPositive ? "+" : "")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+            
+            Text(String(format: "%.2f", displayPercent))
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+            
+            Text("%)")
+                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+        }
+        .onChange(of: change) { newChange in
+            if isAnimating {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     displayChange = newChange
-                    displayPercent = percent
                 }
+            } else {
+                displayChange = newChange
             }
-            .onChange(of: percent) { newPercent in
-                if isAnimating {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        displayChange = change
-                        displayPercent = newPercent
-                    }
-                } else {
-                    displayChange = change
+        }
+        .onChange(of: percent) { newPercent in
+            if isAnimating {
+                withAnimation(.easeInOut(duration: 0.3)) {
                     displayPercent = newPercent
                 }
+            } else {
+                displayPercent = newPercent
             }
-            .onChange(of: isAnimating) { animating in
-                if !animating {
-                    displayChange = change
-                    displayPercent = percent
-                }
+        }
+        .onChange(of: isAnimating) { animating in
+            if !animating {
+                displayChange = change
+                displayPercent = percent
             }
+        }
+    }
+}
+
+// MARK: - Animated Price Text Component (Legacy - keeping for compatibility)
+struct AnimatedPriceText: View {
+    let price: Double
+    let isAnimating: Bool
+    
+    init(price: Double, isAnimating: Bool) {
+        self.price = price
+        self.isAnimating = isAnimating
+    }
+    
+    var body: some View {
+        SmoothPriceTransition(price: price, isAnimating: isAnimating)
+    }
+}
+
+// MARK: - Animated Change Text Component (Legacy - keeping for compatibility)
+struct AnimatedChangeText: View {
+    let change: Double
+    let percent: Double
+    let isPositive: Bool
+    let isAnimating: Bool
+    
+    init(change: Double, percent: Double, isPositive: Bool, isAnimating: Bool) {
+        self.change = change
+        self.percent = percent
+        self.isPositive = isPositive
+        self.isAnimating = isAnimating
+    }
+    
+    var body: some View {
+        SmoothChangeText(change: change, percent: percent, isPositive: isPositive, isAnimating: isAnimating)
     }
 }
 
@@ -205,12 +265,10 @@ struct ModernStockDetailHeader: View {
                     
                     // Price and Change
                     VStack(alignment: .leading, spacing: 6) {
-                        AnimatedPriceText(
+                        SmoothPriceTransition(
                             price: selectedPoint?.price ?? stock.currentPrice,
                             isAnimating: selectedPoint != nil
                         )
-                        .font(.system(size: 32, weight: .semibold, design: .monospaced))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         
                         HStack(spacing: 8) {
                             let changeFromCurrent = selectedPoint?.price ?? stock.currentPrice - stock.currentPrice
@@ -221,14 +279,12 @@ struct ModernStockDetailHeader: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
                             
-                            AnimatedChangeText(
+                            SmoothChangeText(
                                 change: changeFromCurrent,
                                 percent: changePercent,
                                 isPositive: isPositive,
                                 isAnimating: selectedPoint != nil
                             )
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                            .foregroundColor(isPositive ? Color.bullish : Color.bearish)
                         }
                     }
                 }
