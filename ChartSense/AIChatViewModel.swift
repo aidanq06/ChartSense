@@ -14,6 +14,28 @@ class AIChatViewModel: ObservableObject {
         setupSuggestions()
     }
     
+    // MARK: - Image Analysis
+    func addImageAnalysisMessage(_ result: ImageAnalysisResult) {
+        // Add user message with image
+        let userMessage = ChatMessage(
+            content: "📊 Chart Analysis Request",
+            isUser: true,
+            status: .sent
+        )
+        messages.append(userMessage)
+        
+        // Add AI analysis response
+        let aiMessage = ChatMessage(
+            content: result.analysis,
+            isUser: false,
+            status: .sent
+        )
+        messages.append(aiMessage)
+        
+        // Update suggestions based on analysis
+        updateSuggestionsForImageAnalysis()
+    }
+    
     // MARK: - Public Methods
     func sendMessage(_ content: String) {
         let trimmedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -233,5 +255,22 @@ class AIChatViewModel: ObservableObject {
             // Reset to default suggestions
             setupSuggestions()
         }
+    }
+    
+    private func updateSuggestionsForImageAnalysis() {
+        suggestions = [
+            AISuggestion(title: "Analyze another chart", icon: "camera.viewfinder") {
+                // This will trigger the image picker
+            },
+            AISuggestion(title: "Get similar patterns", icon: "chart.line.uptrend.xyaxis") {
+                self.sendMessage("Can you find stocks with similar chart patterns?")
+            },
+            AISuggestion(title: "Risk assessment", icon: "exclamationmark.triangle.fill") {
+                self.sendMessage("What are the risks associated with this chart pattern?")
+            },
+            AISuggestion(title: "Entry/exit strategy", icon: "target") {
+                self.sendMessage("What would be the best entry and exit strategy for this pattern?")
+            }
+        ]
     }
 } 

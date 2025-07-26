@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import PhotosUI
 
 // MARK: - AI Chat Models
 // Using ChatMessage from Item.swift
@@ -11,12 +12,23 @@ struct AISuggestion: Identifiable {
     let action: () -> Void
 }
 
+// MARK: - Image Analysis Models
+struct ImageAnalysisResult {
+    let image: UIImage
+    let analysis: String
+    let timestamp: Date
+    let confidence: Double
+}
+
 // MARK: - Modern AI Chat View
 struct ModernAIChatView: View {
     @StateObject private var viewModel = AIChatViewModel()
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var premiumManager = PremiumManager.shared
     @FocusState private var isInputFocused: Bool
+    @State private var showingImagePicker = false
+    @State private var showingImageAnalysis = false
+    @State private var selectedImage: UIImage?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -69,7 +81,10 @@ struct ModernAIChatView: View {
             ModernChatInput(
                 text: $viewModel.inputText,
                 onSend: viewModel.sendMessage,
-                suggestions: viewModel.suggestions
+                suggestions: viewModel.suggestions,
+                onImageUpload: {
+                    showingImagePicker = true
+                }
             )
             .focused($isInputFocused)
         }
@@ -78,9 +93,347 @@ struct ModernAIChatView: View {
         .sheet(isPresented: $premiumManager.showingPremiumUpgrade) {
             PremiumUpgradeView()
         }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker(selectedImage: $selectedImage)
+                .onDisappear {
+                    if let image = selectedImage {
+                        showingImageAnalysis = true
+                    }
+                }
+        }
+        .sheet(isPresented: $showingImageAnalysis) {
+            if let image = selectedImage {
+                ImageAnalysisView(
+                    image: image,
+                    onAnalysisComplete: { result in
+                        viewModel.addImageAnalysisMessage(result)
+                        selectedImage = nil
+                        showingImageAnalysis = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Image Analysis View
+struct ImageAnalysisView: View {
+    let image: UIImage
+    let onAnalysisComplete: (ImageAnalysisResult) -> Void
+    
+    @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var premiumManager = PremiumManager.shared
+    @State private var analysisResult: ImageAnalysisResult?
+    @State private var isAnalyzing = false
+    @State private var analysisProgress: Double = 0.0
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    
+                    Spacer()
+                    
+                    Text("Chart Analysis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Spacer()
+                    
+                    Button("Done") {
+                        if let result = analysisResult {
+                            onAnalysisComplete(result)
+                        }
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(analysisResult != nil ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : Color.gray)
+                    .disabled(analysisResult == nil)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 0.5)
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border),
+                    alignment: .bottom
+                )
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Image display
+                        VStack(spacing: 16) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 300)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                                )
+                            
+                            // Premium status indicator
+                            if !premiumManager.isPremium {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "camera.viewfinder")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                    
+                                    Text("\(premiumManager.imageAnalysisRemaining) analysis left today")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                                .cornerRadius(8)
+                            }
+                        }
+                        
+                        // Analysis button or result
+                        if let result = analysisResult {
+                            // Analysis result
+                            VStack(spacing: 16) {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 20, weight: .medium))
+                                        .foregroundColor(.green)
+                                    
+                                    Text("Analysis Complete")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(Int(result.confidence * 100))% confidence")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                }
+                                
+                                NotionCard {
+                                    Text(result.analysis)
+                                        .font(.system(size: 15, weight: .regular))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                        .multilineTextAlignment(.leading)
+                                }
+                            }
+                        } else if isAnalyzing {
+                            // Analysis in progress
+                            VStack(spacing: 16) {
+                                ProgressView(value: analysisProgress)
+                                    .progressViewStyle(LinearProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
+                                    .scaleEffect(x: 1, y: 2, anchor: .center)
+                                
+                                Text("Analyzing chart patterns...")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                
+                                Text("\(Int(analysisProgress * 100))%")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                            }
+                            .padding(.vertical, 20)
+                        } else {
+                            // Start analysis button
+                            Button(action: startAnalysis) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "brain.head.profile")
+                                        .font(.system(size: 18, weight: .medium))
+                                    
+                                    Text("Analyze Chart")
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    LinearGradient(
+                                        colors: [.blue, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(12)
+                            }
+                            .disabled(!premiumManager.canPerformImageAnalysis())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 24)
+                }
+            }
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+        }
+        .onAppear {
+            if premiumManager.canPerformImageAnalysis() {
+                startAnalysis()
+            }
+        }
     }
     
+    private func startAnalysis() {
+        guard premiumManager.canPerformImageAnalysis() else {
+            premiumManager.showPremiumUpgrade()
+            return
+        }
+        
+        // Use image analysis
+        if !premiumManager.useImageAnalysis() {
+            return
+        }
+        
+        isAnalyzing = true
+        analysisProgress = 0.0
+        
+        // Simulate analysis progress
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            analysisProgress += 0.02
+            if analysisProgress >= 1.0 {
+                timer.invalidate()
+                completeAnalysis()
+            }
+        }
+    }
+    
+    private func completeAnalysis() {
+        isAnalyzing = false
+        
+        // Generate analysis result (replace with actual AI analysis)
+        let analysis = generateChartAnalysis()
+        let confidence = Double.random(in: 0.75...0.95)
+        
+        analysisResult = ImageAnalysisResult(
+            image: image,
+            analysis: analysis,
+            timestamp: Date(),
+            confidence: confidence
+        )
+    }
+    
+    private func generateChartAnalysis() -> String {
+        // Simulate AI chart analysis (replace with actual AI service)
+        let analyses = [
+            """
+            📈 **Chart Analysis: Bullish Pattern Detected**
+            
+            **Pattern Recognition:**
+            • **Ascending Triangle** formation identified
+            • Price consolidating above key support level
+            • Volume showing accumulation pattern
+            
+            **Technical Indicators:**
+            • RSI: 58 (neutral, trending upward)
+            • MACD: Bullish crossover imminent
+            • Moving Averages: Price above 50-day MA
+            
+            **Key Levels:**
+            • **Support:** $145.20 (critical level to watch)
+            • **Resistance:** $152.80 (breakout target)
+            • **Stop Loss:** $142.50 (risk management)
+            
+            **Recommendation:** 
+            Consider a long position with tight stop loss. Breakout above $152.80 could trigger significant upside momentum. Monitor volume for confirmation.
+            """,
+            
+            """
+            📊 **Chart Analysis: Consolidation Phase**
+            
+            **Pattern Recognition:**
+            • **Rectangle Pattern** forming
+            • Price oscillating between defined levels
+            • Decreasing volatility suggests breakout approaching
+            
+            **Technical Indicators:**
+            • Bollinger Bands: Price near upper band
+            • Stochastic: Overbought conditions
+            • Volume: Below average, indicating indecision
+            
+            **Key Levels:**
+            • **Upper Boundary:** $168.40
+            • **Lower Boundary:** $162.10
+            • **Breakout Target:** $175.20 (if bullish)
+            
+            **Recommendation:**
+            Wait for clear breakout direction. Current consolidation suggests major move ahead. Consider straddle options strategy for breakout play.
+            """,
+            
+            """
+            ⚠️ **Chart Analysis: Bearish Signals Emerging**
+            
+            **Pattern Recognition:**
+            • **Head and Shoulders** pattern developing
+            • Right shoulder forming at resistance
+            • Volume declining on rallies
+            
+            **Technical Indicators:**
+            • RSI: 42 (bearish momentum)
+            • MACD: Bearish divergence
+            • Moving Averages: Death cross potential
+            
+            **Key Levels:**
+            • **Neckline:** $134.50 (critical breakdown level)
+            • **Target:** $125.80 (measured move)
+            • **Stop Loss:** $138.20 (above right shoulder)
+            
+            **Recommendation:**
+            Exercise caution. Consider reducing position size or implementing protective puts. Breakdown below neckline would confirm bearish pattern.
+            """
+        ]
+        
+        return analyses.randomElement() ?? analyses[0]
+    }
+}
 
+// MARK: - Image Picker
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            
+            guard let provider = results.first?.itemProvider else { return }
+            
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.selectedImage = image as? UIImage
+                    }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - AI Chat Header
@@ -114,14 +467,26 @@ struct AIChatHeader: View {
             
             // Premium indicator (for free users)
             if !premiumManager.isPremium {
-                HStack(spacing: 6) {
-                    Image(systemName: "message.circle")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "message.circle")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Text("\(premiumManager.aiMessagesRemaining)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
                     
-                    Text("\(premiumManager.aiMessagesRemaining) left")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Text("\(premiumManager.imageAnalysisRemaining)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -222,6 +587,26 @@ struct WelcomeMessage: View {
                 }
             }
             
+            // Image analysis feature card
+            NotionCard {
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.purple)
+                        
+                        Text("Chart Analysis")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    }
+                    
+                    Text("Upload a screenshot of any chart and I'll provide detailed technical analysis, pattern recognition, and trading recommendations.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            
             // Quick suggestions
             VStack(spacing: 8) {
                 Text("Try asking:")
@@ -231,6 +616,12 @@ struct WelcomeMessage: View {
                 HStack(spacing: 8) {
                     SuggestionChip(title: "Analyze AAPL", icon: "chart.line.uptrend.xyaxis")
                     SuggestionChip(title: "Market trends", icon: "chart.bar.fill")
+                }
+                
+                HStack(spacing: 8) {
+                    SuggestionChip(title: "Upload chart", icon: "camera.viewfinder") {
+                        // This will be handled by the parent view
+                    }
                 }
             }
         }
@@ -369,6 +760,7 @@ struct ModernChatInput: View {
     @FocusState var isFocused: Bool
     let onSend: (String) -> Void
     let suggestions: [AISuggestion]
+    let onImageUpload: (() -> Void)?
     
     @StateObject private var themeManager = ThemeManager.shared
     @State private var inputHeight: CGFloat = 40
@@ -401,6 +793,21 @@ struct ModernChatInput: View {
             
             // Input area
             HStack(spacing: 12) {
+                // Image upload button
+                Button(action: {
+                    onImageUpload?()
+                }) {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
                 // Text input
                 HStack(spacing: 8) {
                     TextField("Ask me anything about stocks...", text: $text, axis: .vertical)
