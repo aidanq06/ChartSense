@@ -468,11 +468,11 @@ struct AIChatHeader: View {
             // Premium indicator (for free users)
             if !premiumManager.isPremium {
                 HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "message.circle")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        
+                HStack(spacing: 6) {
+                    Image(systemName: "message.circle")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    
                         Text("\(premiumManager.aiMessagesRemaining)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
@@ -484,8 +484,8 @@ struct AIChatHeader: View {
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                         
                         Text("\(premiumManager.imageAnalysisRemaining)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                     }
                 }
                 .padding(.horizontal, 8)
