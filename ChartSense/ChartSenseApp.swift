@@ -48,6 +48,9 @@ struct ChartSenseApp: App {
             
             // Debug Supabase configuration
             SupabaseService.shared.debugConfiguration()
+            
+            // Test Supabase connection
+            Config.testSupabaseConnection()
         } else {
             print("❌ Configuration validation failed. Please check your Config.plist file.")
             print("💡 Make sure you've added your API keys to ChartSense/Config.plist")

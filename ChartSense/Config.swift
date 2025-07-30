@@ -124,6 +124,34 @@ struct Config {
         print("🔑 Supabase Key: \(supabaseAnonKey.prefix(10))...")
         print("🤖 OpenAI: \(openAIAPIKey.isEmpty ? "Not configured" : "Configured")")
     }
+
+    // MARK: - Debug Methods
+    static func testSupabaseConnection() {
+        print("🔧 Testing Supabase Configuration:")
+        print("   URL: \(supabaseURL)")
+        print("   Anon Key: \(String(supabaseAnonKey.prefix(10)))...")
+        
+        // Test basic connectivity
+        Task {
+            do {
+                let url = URL(string: "\(supabaseURL)/rest/v1/")!
+                var request = URLRequest(url: url)
+                request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+                request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+                
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("   Connection test: \(httpResponse.statusCode)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("   Response: \(responseString)")
+                    }
+                }
+            } catch {
+                print("   Connection test failed: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - Environment Detection

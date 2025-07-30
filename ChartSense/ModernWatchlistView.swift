@@ -14,101 +14,21 @@ struct ModernWatchlistView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingAddStock = false
     @State private var searchText = ""
-    @State private var selectedSortOption = SortOption.symbol
-    @State private var showingSortMenu = false
-    @State private var showingFilterMenu = false
-    @State private var selectedFilter = FilterOption.all
     
-    enum SortOption: String, CaseIterable {
-        case symbol = "Symbol"
-        case name = "Name"
-        case price = "Price"
-        case change = "Change"
-        case sentiment = "Sentiment"
-        case added = "Added"
-        
-        var icon: String {
-            switch self {
-            case .symbol: return "textformat.abc"
-            case .name: return "building.2"
-            case .price: return "dollarsign.circle"
-            case .change: return "chart.line.uptrend.xyaxis"
-            case .sentiment: return "brain.head.profile"
-            case .added: return "calendar"
-            }
-        }
-    }
+
     
-    enum FilterOption: String, CaseIterable {
-        case all = "All"
-        case bullish = "Bullish"
-        case bearish = "Bearish"
-        case alerts = "Alerts"
-        case targets = "Price Targets"
-        
-        var icon: String {
-            switch self {
-            case .all: return "list.bullet"
-            case .bullish: return "arrow.up.circle"
-            case .bearish: return "arrow.down.circle"
-            case .alerts: return "bell"
-            case .targets: return "target"
-            }
-        }
-    }
+
     
-    var filteredAndSortedItems: [WatchlistItem] {
-        let filtered = viewModel.watchlistItems.filter { item in
+    var filteredItems: [WatchlistItemWithStock] {
+        return viewModel.watchlistItemsWithStock.filter { itemWithStock in
+            let item = itemWithStock.watchlistItem
+            let stock = itemWithStock.stock
+            
             let matchesSearch = searchText.isEmpty || 
                 item.symbol.localizedCaseInsensitiveContains(searchText) ||
                 item.companyName.localizedCaseInsensitiveContains(searchText)
             
-            let matchesFilter: Bool
-            switch selectedFilter {
-            case .all:
-                matchesFilter = true
-            case .bullish:
-                if let sentiment = viewModel.sentiments[item.symbol] {
-                    matchesFilter = sentiment.overallRating == .bullish || sentiment.overallRating == .stronglyBullish
-                } else {
-                    matchesFilter = false
-                }
-            case .bearish:
-                if let sentiment = viewModel.sentiments[item.symbol] {
-                    matchesFilter = sentiment.overallRating == .bearish || sentiment.overallRating == .highlyNegative
-                } else {
-                    matchesFilter = false
-                }
-            case .alerts:
-                matchesFilter = item.alertsEnabled
-            case .targets:
-                matchesFilter = item.priceTarget != nil
-            }
-            
-            return matchesSearch && matchesFilter
-        }
-        
-        return filtered.sorted { first, second in
-            switch selectedSortOption {
-            case .symbol:
-                return first.symbol < second.symbol
-            case .name:
-                return first.companyName < second.companyName
-            case .price:
-                let firstPrice = viewModel.stockDetails[first.symbol]?.currentPrice ?? 0
-                let secondPrice = viewModel.stockDetails[second.symbol]?.currentPrice ?? 0
-                return firstPrice > secondPrice
-            case .change:
-                let firstChange = viewModel.stockDetails[first.symbol]?.dailyChangePercent ?? 0
-                let secondChange = viewModel.stockDetails[second.symbol]?.dailyChangePercent ?? 0
-                return firstChange > secondChange
-            case .sentiment:
-                let firstSentiment = viewModel.sentiments[first.symbol]?.overallRating.rawValue ?? ""
-                let secondSentiment = viewModel.sentiments[second.symbol]?.overallRating.rawValue ?? ""
-                return firstSentiment < secondSentiment
-            case .added:
-                return first.addedDate > second.addedDate
-            }
+            return matchesSearch
         }
     }
     
@@ -118,28 +38,21 @@ struct ModernWatchlistView: View {
                 // Modern Header
                 ModernWatchlistHeader(
                     searchText: $searchText,
-                    selectedSortOption: $selectedSortOption,
-                    selectedFilter: $selectedFilter,
-                    showingSortMenu: $showingSortMenu,
-                    showingFilterMenu: $showingFilterMenu,
                     onAddStock: { showingAddStock = true },
                     onRefresh: viewModel.refreshWatchlist
                 )
                 
                 // Content
-                if viewModel.isLoading {
+                if viewModel.isLoading && viewModel.watchlistItemsWithStock.isEmpty {
                     ModernLoadingView()
-                } else if filteredAndSortedItems.isEmpty {
+                } else if filteredItems.isEmpty {
                     ModernEmptyWatchlistView(
                         hasSearchText: !searchText.isEmpty,
-                        hasFilters: selectedFilter != .all,
-                        onClearSearch: { searchText = "" },
-                        onClearFilters: { selectedFilter = .all }
+                        onClearSearch: { searchText = "" }
                     )
                 } else {
                     ModernWatchlistContent(
-                        items: filteredAndSortedItems,
-                        stockDetails: viewModel.stockDetails,
+                        items: filteredItems,
                         sentiments: viewModel.sentiments,
                         onSelect: { stock in
                             appViewModel.selectStock(stock)
@@ -167,10 +80,6 @@ struct ModernWatchlistView: View {
 // MARK: - Modern Watchlist Header
 struct ModernWatchlistHeader: View {
     @Binding var searchText: String
-    @Binding var selectedSortOption: ModernWatchlistView.SortOption
-    @Binding var selectedFilter: ModernWatchlistView.FilterOption
-    @Binding var showingSortMenu: Bool
-    @Binding var showingFilterMenu: Bool
     let onAddStock: () -> Void
     let onRefresh: () -> Void
     @StateObject private var themeManager = ThemeManager.shared
@@ -220,69 +129,6 @@ struct ModernWatchlistHeader: View {
             
             // Search Bar
             ModernSearchBar(text: $searchText, placeholder: "Search watchlist...")
-            
-            // Filter and Sort Controls
-            HStack(spacing: 12) {
-                // Sort Button
-                Button(action: { showingSortMenu = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: selectedSortOption.icon)
-                            .font(.system(size: 14, weight: .medium))
-                        
-                        Text(selectedSortOption.rawValue)
-                            .font(.system(size: 14, weight: .medium))
-                        
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                    .cornerRadius(8)
-                }
-                .actionSheet(isPresented: $showingSortMenu) {
-                    ActionSheet(
-                        title: Text("Sort by"),
-                        buttons: ModernWatchlistView.SortOption.allCases.map { option in
-                            .default(Text(option.rawValue)) {
-                                selectedSortOption = option
-                            }
-                        } + [.cancel()]
-                    )
-                }
-                
-                // Filter Button
-                Button(action: { showingFilterMenu = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: selectedFilter.icon)
-                            .font(.system(size: 14, weight: .medium))
-                        
-                        Text(selectedFilter.rawValue)
-                            .font(.system(size: 14, weight: .medium))
-                        
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                    .cornerRadius(8)
-                }
-                .actionSheet(isPresented: $showingFilterMenu) {
-                    ActionSheet(
-                        title: Text("Filter by"),
-                        buttons: ModernWatchlistView.FilterOption.allCases.map { option in
-                            .default(Text(option.rawValue)) {
-                                selectedFilter = option
-                            }
-                        } + [.cancel()]
-                    )
-                }
-                
-                Spacer()
-            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -335,14 +181,20 @@ struct ModernLoadingView: View {
         VStack(spacing: 24) {
             Spacer()
             
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 ProgressView()
-                    .scaleEffect(1.2)
+                    .scaleEffect(1.3)
                     .progressViewStyle(CircularProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
                 
-                Text("Loading your watchlist...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                VStack(spacing: 8) {
+                    Text("Loading Watchlist")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text("Fetching your stocks...")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
             }
             
             Spacer()
@@ -353,9 +205,7 @@ struct ModernLoadingView: View {
 // MARK: - Modern Empty Watchlist View
 struct ModernEmptyWatchlistView: View {
     let hasSearchText: Bool
-    let hasFilters: Bool
     let onClearSearch: () -> Void
-    let onClearFilters: () -> Void
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
@@ -363,44 +213,30 @@ struct ModernEmptyWatchlistView: View {
             Spacer()
             
             VStack(spacing: 20) {
-                Image(systemName: hasSearchText || hasFilters ? "magnifyingglass" : "heart")
+                Image(systemName: hasSearchText ? "magnifyingglass" : "heart")
                     .font(.system(size: 60))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                 
                 VStack(spacing: 8) {
-                    Text(hasSearchText || hasFilters ? "No matching stocks" : "Your Watchlist is Empty")
+                    Text(hasSearchText ? "No matching stocks" : "Your Watchlist is Empty")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     
-                    Text(hasSearchText || hasFilters ? "Try adjusting your search or filters" : "Add stocks you want to track for quick access to their sentiment and market data")
+                    Text(hasSearchText ? "Try adjusting your search" : "Add stocks you want to track for quick access to their sentiment and market data")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
                 
-                if hasSearchText || hasFilters {
-                    HStack(spacing: 12) {
-                        if hasSearchText {
-                            Button("Clear Search", action: onClearSearch)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.blue)
-                                .cornerRadius(8)
-                        }
-                        
-                        if hasFilters {
-                            Button("Clear Filters", action: onClearFilters)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.purple)
-                                .cornerRadius(8)
-                        }
-                    }
+                if hasSearchText {
+                    Button("Clear Search", action: onClearSearch)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.blue)
+                        .cornerRadius(8)
                 }
             }
             
@@ -411,8 +247,7 @@ struct ModernEmptyWatchlistView: View {
 
 // MARK: - Modern Watchlist Content
 struct ModernWatchlistContent: View {
-    let items: [WatchlistItem]
-    let stockDetails: [String: Stock]
+    let items: [WatchlistItemWithStock]
     let sentiments: [String: SentimentAnalysis]
     let onSelect: (Stock) -> Void
     let onRemove: (WatchlistItem) -> Void
@@ -422,14 +257,14 @@ struct ModernWatchlistContent: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                ForEach(items, id: \.symbol) { item in
+                ForEach(items, id: \.id) { itemWithStock in
                     ModernWatchlistCard(
-                        item: item,
-                        stock: stockDetails[item.symbol],
-                        sentiment: sentiments[item.symbol],
+                        item: itemWithStock.watchlistItem,
+                        stock: itemWithStock.stock,
+                        sentiment: sentiments[itemWithStock.watchlistItem.symbol],
                         onSelect: onSelect,
-                        onRemove: { onRemove(item) },
-                        onToggleAlerts: { onToggleAlerts(item.symbol) }
+                        onRemove: { onRemove(itemWithStock.watchlistItem) },
+                        onToggleAlerts: { onToggleAlerts(itemWithStock.watchlistItem.symbol) }
                     )
                 }
             }
@@ -461,17 +296,9 @@ struct ModernWatchlistCard: View {
                 HStack(spacing: 16) {
                     // Stock Info
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(item.symbol)
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            
-                            if item.alertsEnabled {
-                                Image(systemName: "bell.fill")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                            }
-                        }
+                        Text(item.symbol)
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         
                         Text(item.companyName)
                             .font(.system(size: 14, weight: .medium))
@@ -510,6 +337,32 @@ struct ModernWatchlistCard: View {
                         }
                     }
                     
+                    // Alert Toggle Button
+                    Button(action: {
+                        // Add haptic feedback
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
+                        onToggleAlerts()
+                    }) {
+                        Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(item.alertsEnabled ? 
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) :
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
+                            .frame(width: 32, height: 32)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(item.alertsEnabled ? 
+                                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : 
+                                        Color.clear, lineWidth: 1)
+                            )
+                            .scaleEffect(item.alertsEnabled ? 1.1 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: item.alertsEnabled)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
                     // Options Button
                     Button(action: { showingOptions = true }) {
                         Image(systemName: "ellipsis")
@@ -524,9 +377,6 @@ struct ModernWatchlistCard: View {
                             title: Text(item.symbol),
                             message: Text(item.companyName),
                             buttons: [
-                                .default(Text(item.alertsEnabled ? "Disable Alerts" : "Enable Alerts")) {
-                                    onToggleAlerts()
-                                },
                                 .destructive(Text("Remove from Watchlist")) {
                                     onRemove()
                                 },
@@ -635,9 +485,9 @@ struct ModernAddStockSheet: View {
                 .padding(.top, 16)
                 
                 // Results
-                if searchViewModel.isLoading {
+                if searchViewModel.isLoadingAllStocks {
                     Spacer()
-                    ProgressView("Searching...")
+                    ProgressView("Loading stocks...")
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                     Spacer()
                 } else if !searchViewModel.searchResults.isEmpty {
@@ -675,15 +525,15 @@ struct ModernAddStockSheet: View {
                 } else {
                     Spacer()
                     VStack(spacing: 16) {
-                        Image(systemName: "plus.circle")
+                        Image(systemName: "list.bullet")
                             .font(.system(size: 40))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                         
-                        Text("Search for stocks")
+                        Text("All Available Stocks")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         
-                        Text("Enter a stock symbol or company name")
+                        Text("Search to filter the list")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                     }
@@ -719,13 +569,23 @@ struct ModernAddStockRow: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(stock.formattedPrice)
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(stock.formattedChangePercent)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(stock.isPositiveChange ? Color.bullish : Color.bearish)
+                    if stock.currentPrice > 0 {
+                        Text(stock.formattedPrice)
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        
+                        Text(stock.formattedChangePercent)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(stock.isPositiveChange ? Color.bullish : Color.bearish)
+                    } else {
+                        Text("N/A")
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Text("N/A")
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
                 }
                 
                 Image(systemName: "plus.circle.fill")

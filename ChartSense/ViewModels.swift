@@ -54,13 +54,16 @@ class AppViewModel: ObservableObject {
 class SearchViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var searchResults: [Stock] = []
+    @Published var allStocks: [Stock] = []
     @Published var recentSearches: [String] = []
     @Published var popularStocks: [Stock] = []
     @Published var isLoading = false
     @Published var hasSearched = false
+    @Published var isLoadingAllStocks = false
     
     private let searchService = SearchService.shared
     private let stockService = StockService.shared
+    private let supabaseService = SupabaseService.shared
     private var searchCancellable: AnyCancellable?
     
     init() {
@@ -93,13 +96,19 @@ class SearchViewModel: ObservableObject {
     @MainActor
     func performSearch(query: String) async {
         guard !query.isEmpty else {
-            searchResults = []
+            // When search is empty, show all stocks
+            searchResults = allStocks
             hasSearched = false
             return
         }
         
         hasSearched = true
-        await searchService.searchStocks(query: query)
+        
+        // Filter all stocks based on search query
+        searchResults = allStocks.filter { stock in
+            stock.symbol.localizedCaseInsensitiveContains(query) ||
+            stock.companyName.localizedCaseInsensitiveContains(query)
+        }
     }
     
     func selectRecentSearch(_ search: String) {
@@ -108,7 +117,7 @@ class SearchViewModel: ObservableObject {
     
     func clearSearch() {
         searchText = ""
-        searchResults = []
+        searchResults = allStocks
         hasSearched = false
     }
     
@@ -120,6 +129,9 @@ class SearchViewModel: ObservableObject {
     
     @MainActor
     func loadInitialData() async {
+        // Load all stocks from database
+        await loadAllStocks()
+        
         do {
             popularStocks = try await stockService.getPopularStocks()
         } catch {
@@ -127,6 +139,24 @@ class SearchViewModel: ObservableObject {
             popularStocks = []
         }
         recentSearches = searchService.recentSearches
+    }
+    
+    @MainActor
+    func loadAllStocks() async {
+        isLoadingAllStocks = true
+        
+        do {
+            let stocks = try await supabaseService.getAllStocks()
+            allStocks = stocks
+            searchResults = stocks // Show all stocks by default
+            print("✅ Loaded \(stocks.count) stocks from database")
+        } catch {
+            print("❌ Error loading all stocks: \(error)")
+            allStocks = []
+            searchResults = []
+        }
+        
+        isLoadingAllStocks = false
     }
 }
 
@@ -231,86 +261,213 @@ class SentimentViewModel: ObservableObject {
 // MARK: - Watchlist View Model
 class WatchlistViewModel: ObservableObject {
     @Published var watchlistItems: [WatchlistItem] = []
+    @Published var watchlistItemsWithStock: [WatchlistItemWithStock] = []
     @Published var stockDetails: [String: Stock] = [:]
     @Published var sentiments: [String: SentimentAnalysis] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showingAddStock = false
     
+    private let supabaseService = SupabaseService.shared
     private let stockService = StockService.shared
     private let sentimentService = SentimentService.shared
     
     init() {
-        loadWatchlist()
-    }
-    
-    func loadWatchlist() {
-        // In a real app, this would load from Core Data/SwiftData
-        // For now, using mock data
-        watchlistItems = [
-            WatchlistItem(symbol: "AAPL", companyName: "Apple Inc.", alertsEnabled: true, priceTarget: 200.0),
-            WatchlistItem(symbol: "TSLA", companyName: "Tesla, Inc.", alertsEnabled: false, priceTarget: 300.0),
-            WatchlistItem(symbol: "GOOGL", companyName: "Alphabet Inc.", alertsEnabled: true)
-        ]
-        
-        loadStockDetails()
-    }
-    
-    func addToWatchlist(_ stock: Stock) {
-        let newItem = WatchlistItem(
-            symbol: stock.symbol,
-            companyName: stock.companyName
-        )
-        
-        watchlistItems.append(newItem)
-        stockDetails[stock.symbol] = stock
-        
-        // Load sentiment for new stock
-        Task {
-            await loadSentiment(for: stock.symbol)
-        }
-    }
-    
-    func removeFromWatchlist(_ item: WatchlistItem) {
-        watchlistItems.removeAll { $0.symbol == item.symbol }
-        stockDetails.removeValue(forKey: item.symbol)
-        sentiments.removeValue(forKey: item.symbol)
-    }
-    
-    func updatePriceTarget(for symbol: String, target: Double) {
-        if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
-            watchlistItems[index].priceTarget = target
-        }
-    }
-    
-    func toggleAlerts(for symbol: String) {
-        if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
-            watchlistItems[index].alertsEnabled.toggle()
-        }
-    }
-    
-    private func loadStockDetails() {
-        isLoading = true
-        
-        Task {
-            await loadAllStockDetails()
+        Task { @MainActor in
+            loadWatchlist()
         }
     }
     
     @MainActor
-    private func loadAllStockDetails() async {
-        let symbols = watchlistItems.map { $0.symbol }
+    func loadWatchlist() {
+        isLoading = true
+        errorMessage = nil
         
-        // Load stock details and sentiment in parallel for better performance
-        await withTaskGroup(of: Void.self) { group in
-            for symbol in symbols {
-                group.addTask {
-                    await self.loadStockAndSentiment(for: symbol)
+        Task {
+            do {
+                let items = try await supabaseService.getWatchlist()
+                await MainActor.run {
+                    self.watchlistItems = items
+                    self.isLoading = false
                 }
+                
+                // Load stock data for all items
+                await loadWatchlistWithStockData()
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+                print("❌ Error loading watchlist: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func addToWatchlist(_ stock: Stock, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String = "above") {
+        Task {
+            do {
+                try await supabaseService.addToWatchlist(
+                    symbol: stock.symbol,
+                    companyName: stock.companyName,
+                    priceTarget: priceTarget,
+                    notes: notes,
+                    alertPrice: alertPrice,
+                    alertType: alertType
+                )
+                
+                // Reload watchlist to get updated data
+                await loadWatchlist()
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error adding to watchlist: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func removeFromWatchlist(_ item: WatchlistItem) {
+        Task {
+            do {
+                try await supabaseService.removeFromWatchlist(symbol: item.symbol)
+                
+                // Reload watchlist to get updated data
+                await loadWatchlist()
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error removing from watchlist: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func updatePriceTarget(for symbol: String, target: Double) {
+        Task {
+            do {
+                try await supabaseService.setWatchlistPriceTarget(symbol: symbol, target: target)
+                
+                // Update local state
+                if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
+                    watchlistItems[index].priceTarget = target
+                }
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error updating price target: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func toggleAlerts(for symbol: String) {
+        // Update UI immediately for better UX
+        if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
+            let newEnabled = !watchlistItems[index].alertsEnabled
+            watchlistItems[index].alertsEnabled = newEnabled
+            
+            // Also update the combined data structure
+            if let combinedIndex = watchlistItemsWithStock.firstIndex(where: { $0.watchlistItem.symbol == symbol }) {
+                watchlistItemsWithStock[combinedIndex].watchlistItem.alertsEnabled = newEnabled
             }
         }
         
-        isLoading = false
+        // Update in background
+        Task {
+            do {
+                let currentItem = watchlistItems.first { $0.symbol == symbol }
+                let newEnabled = currentItem?.alertsEnabled ?? false
+                
+                try await supabaseService.toggleWatchlistAlerts(symbol: symbol, enabled: newEnabled)
+                
+            } catch {
+                // Revert the UI change if the API call fails
+                await MainActor.run {
+                    if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
+                        watchlistItems[index].alertsEnabled = !(watchlistItems[index].alertsEnabled)
+                    }
+                    if let combinedIndex = watchlistItemsWithStock.firstIndex(where: { $0.watchlistItem.symbol == symbol }) {
+                        watchlistItemsWithStock[combinedIndex].watchlistItem.alertsEnabled = !(watchlistItemsWithStock[combinedIndex].watchlistItem.alertsEnabled)
+                    }
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error toggling alerts: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func setAlert(for symbol: String, price: Double, type: String = "above") {
+        Task {
+            do {
+                try await supabaseService.setWatchlistAlert(symbol: symbol, price: price, type: type)
+                
+                // Update local state
+                if let index = watchlistItems.firstIndex(where: { $0.symbol == symbol }) {
+                    watchlistItems[index].alertPrice = price
+                    watchlistItems[index].alertType = type
+                    watchlistItems[index].alertsEnabled = true
+                }
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error setting alert: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    func updateWatchlistItem(symbol: String, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String? = nil, alertsEnabled: Bool? = nil) {
+        Task {
+            do {
+                try await supabaseService.updateWatchlistItem(
+                    symbol: symbol,
+                    priceTarget: priceTarget,
+                    notes: notes,
+                    alertPrice: alertPrice,
+                    alertType: alertType,
+                    alertsEnabled: alertsEnabled
+                )
+                
+                // Reload watchlist to get updated data
+                await loadWatchlist()
+                
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                }
+                print("❌ Error updating watchlist item: \(error)")
+            }
+        }
+    }
+    
+    @MainActor
+    private func loadWatchlistWithStockData() async {
+        do {
+            let itemsWithStock = try await supabaseService.getWatchlistWithStockData()
+            await MainActor.run {
+                self.watchlistItemsWithStock = itemsWithStock
+                
+                // Update stock details and sentiments
+                for itemWithStock in itemsWithStock {
+                    if let stock = itemWithStock.stock {
+                        self.stockDetails[stock.symbol] = stock
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error loading watchlist with stock data: \(error)")
+        }
     }
     
     @MainActor
@@ -325,9 +482,11 @@ class WatchlistViewModel: ObservableObject {
     
     @MainActor
     private func loadStockDetails(for symbol: String) async {
-        await stockService.searchStock(symbol: symbol)
-        if let stock = stockService.currentStock, stock.symbol == symbol {
+        do {
+            let stock = try await supabaseService.fetchStockData(symbol: symbol)
             stockDetails[symbol] = stock
+        } catch {
+            print("❌ Error loading stock details for \(symbol): \(error)")
         }
     }
     
@@ -339,12 +498,25 @@ class WatchlistViewModel: ObservableObject {
         }
     }
     
+    @MainActor
     func refreshWatchlist() {
-        loadStockDetails()
+        loadWatchlist()
     }
     
     func sortedWatchlistItems() -> [WatchlistItem] {
         return watchlistItems.sorted { $0.symbol < $1.symbol }
+    }
+    
+    func sortedWatchlistItemsWithStock() -> [WatchlistItemWithStock] {
+        return watchlistItemsWithStock.sorted { $0.watchlistItem.symbol < $1.watchlistItem.symbol }
+    }
+    
+    func getStockForSymbol(_ symbol: String) -> Stock? {
+        return stockDetails[symbol]
+    }
+    
+    func getSentimentForSymbol(_ symbol: String) -> SentimentAnalysis? {
+        return sentiments[symbol]
     }
 }
 

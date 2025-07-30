@@ -1124,10 +1124,13 @@ struct AuthView: View {
                             
                             // Error Message
                             if let errorMessage = viewModel.errorMessage {
-                                Text(errorMessage)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.red)
-                                    .padding(.top, 8)
+                                ErrorNotification(
+                                    message: errorMessage,
+                                    onDismiss: {
+                                        viewModel.errorMessage = nil
+                                    }
+                                )
+                                .padding(.top, 8)
                             }
                             
                             // Primary Action Button
@@ -1582,30 +1585,44 @@ struct StockListRow: View {
             
             // Price Info
             VStack(alignment: .trailing, spacing: 4) {
-                HStack(spacing: 4) {
-                    Text(stock.formattedRealTimePrice)
-                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                        .foregroundColor(stock.hasRealTimeUpdate ? .green : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                    
-                    if stock.hasRealTimeUpdate {
-                        Image(systemName: "livephoto")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.green)
+                if stock.currentPrice > 0 {
+                    HStack(spacing: 4) {
+                        Text(stock.formattedRealTimePrice)
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .foregroundColor(stock.hasRealTimeUpdate ? .green : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
+                        
+                        if stock.hasRealTimeUpdate {
+                            Image(systemName: "livephoto")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.green)
+                        }
                     }
-                }
-                
-                HStack(spacing: 4) {
-                    Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
                     
-                    Text(stock.formattedChange)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
+                    HStack(spacing: 4) {
+                        Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
+                        
+                        Text(stock.formattedChange)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
+                        
+                        Text("(\(String(format: "%.2f%%", stock.dailyChangePercent)))")
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Text("N/A")
+                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
                     
-                    Text("(\(String(format: "%.2f%%", stock.dailyChangePercent)))")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
+                    HStack(spacing: 4) {
+                        Text("N/A")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
                 }
             }
         }
@@ -2008,9 +2025,9 @@ struct AddStockSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     
-                    if searchViewModel.isLoading {
+                    if searchViewModel.isLoadingAllStocks {
                         Spacer()
-                        ProgressView("Searching...")
+                        ProgressView("Loading stocks...")
                         Spacer()
                     } else if !searchViewModel.searchResults.isEmpty {
                         List(searchViewModel.searchResults, id: \.symbol) { stock in
@@ -2024,11 +2041,11 @@ struct AddStockSheet: View {
                     } else {
                         Spacer()
                         VStack(spacing: 16) {
-                            Image(systemName: "magnifyingglass")
+                            Image(systemName: "list.bullet")
                                 .font(.system(size: 50))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                             
-                            Text("Search for a stock to add to your watchlist")
+                            Text("All Available Stocks")
                                 .font(.body)
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                                 .multilineTextAlignment(.center)

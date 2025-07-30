@@ -414,14 +414,30 @@ final class WatchlistItem {
     var alertsEnabled: Bool
     var priceTarget: Double?
     var notes: String?
+    var alertPrice: Double?
+    var alertType: String
     
-    init(symbol: String, companyName: String, alertsEnabled: Bool = false, priceTarget: Double? = nil, notes: String? = nil) {
+    init(symbol: String, companyName: String, alertsEnabled: Bool = false, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String = "above", addedDate: Date = Date()) {
         self.symbol = symbol.uppercased()
         self.companyName = companyName
-        self.addedDate = Date()
+        self.addedDate = addedDate
         self.alertsEnabled = alertsEnabled
         self.priceTarget = priceTarget
         self.notes = notes
+        self.alertPrice = alertPrice
+        self.alertType = alertType
+    }
+}
+
+// MARK: - Watchlist with Stock Data
+struct WatchlistItemWithStock: Identifiable {
+    let id = UUID()
+    let watchlistItem: WatchlistItem
+    let stock: Stock?
+    
+    init(watchlistItem: WatchlistItem, stock: Stock?) {
+        self.watchlistItem = watchlistItem
+        self.stock = stock
     }
 }
 

@@ -1945,3 +1945,150 @@ struct MarketContextCard: View {
     }
 }
 
+// MARK: - Error Notification Component
+struct ErrorNotification: View {
+    let message: String
+    let onDismiss: () -> Void
+    
+    @State private var isVisible = false
+    @State private var offset: CGFloat = -100
+    @State private var iconScale: CGFloat = 0.5
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Error Icon with animation
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white)
+                .scaleEffect(iconScale)
+                .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.1), value: iconScale)
+            
+            // Error Message
+            Text(message)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+            
+            Spacer()
+            
+            // Dismiss Button
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .scaleEffect(isVisible ? 1 : 0.8)
+                    .animation(.easeInOut(duration: 0.2), value: isVisible)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.red.opacity(0.9), Color.red.opacity(0.8)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .red.opacity(0.3), radius: 8, x: 0, y: 4)
+        )
+        .offset(y: offset)
+        .opacity(isVisible ? 1 : 0)
+        .scaleEffect(isVisible ? 1 : 0.8)
+        .onAppear {
+            // Haptic feedback
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                isVisible = true
+                offset = 0
+            }
+            
+            // Animate icon with slight delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    iconScale = 1.0
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Error Message Parser
+struct ErrorMessageParser {
+    static func parseUserFriendlyMessage(_ errorMessage: String) -> String {
+        // Try to parse JSON error response first
+        if let data = errorMessage.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            
+            // Check for specific error codes
+            if let errorCode = json["error_code"] as? String {
+                switch errorCode {
+                case "user_already_exists":
+                    return "An account with this email already exists. Please try signing in instead."
+                case "invalid_email":
+                    return "Please enter a valid email address."
+                case "weak_password":
+                    return "Password must be at least 6 characters long."
+                case "invalid_credentials":
+                    return "Invalid email or password. Please try again."
+                case "email_not_confirmed":
+                    return "Please check your email and confirm your account."
+                default:
+                    break
+                }
+            }
+            
+            // Check for error message
+            if let msg = json["msg"] as? String {
+                if msg.contains("already registered") || msg.contains("already exists") {
+                    return "An account with this email already exists. Please try signing in instead."
+                }
+                if msg.contains("Invalid email") {
+                    return "Please enter a valid email address."
+                }
+                if msg.contains("Password") && msg.contains("at least") {
+                    return "Password must be at least 6 characters long."
+                }
+                return msg
+            }
+        }
+        
+        // Fallback to string matching for non-JSON errors
+        if errorMessage.contains("user_already_exists") || errorMessage.contains("User already registered") || errorMessage.contains("already exists") {
+            return "An account with this email already exists. Please try signing in instead."
+        }
+        
+        if errorMessage.contains("Invalid email") || errorMessage.contains("invalid_email") {
+            return "Please enter a valid email address."
+        }
+        
+        if errorMessage.contains("Password should be at least") || errorMessage.contains("weak_password") {
+            return "Password must be at least 6 characters long."
+        }
+        
+        if errorMessage.contains("Invalid credentials") || errorMessage.contains("invalid_credentials") {
+            return "Invalid email or password. Please try again."
+        }
+        
+        if errorMessage.contains("Network error") || errorMessage.contains("network") {
+            return "Network connection error. Please check your internet connection and try again."
+        }
+        
+        if errorMessage.contains("Server error") || errorMessage.contains("500") {
+            return "Server error. Please try again in a moment."
+        }
+        
+        if errorMessage.contains("rate limit") || errorMessage.contains("too many requests") {
+            return "Too many attempts. Please wait a moment before trying again."
+        }
+        
+        // Default fallback
+        return "Something went wrong. Please try again."
+    }
+}
+

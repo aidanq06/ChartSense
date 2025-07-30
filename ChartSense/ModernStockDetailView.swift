@@ -8,6 +8,51 @@
 import SwiftUI
 import Charts
 
+// MARK: - TimeFrame Enum
+enum TimeFrame: String, CaseIterable {
+    case oneDay = "1D"
+    case oneWeek = "1W"
+    case oneMonth = "1M"
+    case threeMonths = "3M"
+    case oneYear = "1Y"
+    
+    var displayName: String {
+        return self.rawValue
+    }
+}
+
+
+
+
+
+
+
+// MARK: - Modern Toggle Style
+struct ModernToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            Spacer()
+            Rectangle()
+                .fill(configuration.isOn ? Color.blue : Color.gray.opacity(0.3))
+                .frame(width: 50, height: 30)
+                .cornerRadius(15)
+                .overlay(
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 26, height: 26)
+                        .offset(x: configuration.isOn ? 10 : -10)
+                        .animation(.easeInOut(duration: 0.2), value: configuration.isOn)
+                )
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        configuration.isOn.toggle()
+                    }
+                }
+        }
+    }
+}
+
 // MARK: - Redesigned Stock Detail View
 struct ModernStockDetailView: View {
     let stock: Stock
@@ -16,14 +61,20 @@ struct ModernStockDetailView: View {
     @State private var selectedTab = 0
     @State private var showingAddToWatchlist = false
     @State private var selectedPoint: ChartPoint?
+    @State private var currentStock: Stock
     
     private let tabs = ["Sentiment", "Chart", "Analysis", "Community"]
+    
+    init(stock: Stock) {
+        self.stock = stock
+        self._currentStock = State(initialValue: stock)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             // Professional Header
             ModernStockDetailHeader(
-                stock: stock,
+                stock: currentStock,
                 selectedPoint: selectedPoint,
                 onBack: { dismiss() },
                 onAddToWatchlist: { showingAddToWatchlist = true }
@@ -38,19 +89,19 @@ struct ModernStockDetailView: View {
             // Tab Content
             TabView(selection: $selectedTab) {
                 // Sentiment Tab (Default)
-                SentimentAnalysisTab(stock: stock)
+                SentimentAnalysisTab(stock: currentStock)
                     .tag(0)
                 
                 // Chart Tab
-                RobinhoodStyleChartTab(stock: stock, selectedPoint: $selectedPoint)
+                ProfessionalChartTab(stock: currentStock, selectedPoint: $selectedPoint)
                     .tag(1)
                 
                 // Analysis Tab
-                ComprehensiveAnalysisTab(stock: stock)
+                ComprehensiveAnalysisTab(stock: currentStock)
                     .tag(2)
                 
                 // Community Tab
-                CommunityInsightsTab(stock: stock)
+                CommunityInsightsTab(stock: currentStock)
                     .tag(3)
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
@@ -59,7 +110,27 @@ struct ModernStockDetailView: View {
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
         .navigationBarHidden(true)
         .sheet(isPresented: $showingAddToWatchlist) {
-            AddToWatchlistSheet(stock: stock)
+            AddToWatchlistSheet(stock: currentStock)
+        }
+        .onAppear {
+            // Debug: Print stock data
+            print("💰 Stock detail view for \(currentStock.symbol): price=\(currentStock.currentPrice), change=\(currentStock.dailyChange), dailyChangePercent=\(currentStock.dailyChangePercent)")
+            
+            // If stock price is 0, try to fetch fresh data
+            if currentStock.currentPrice == 0 {
+                print("⚠️ Stock price is 0, attempting to fetch fresh data...")
+                Task {
+                    do {
+                        let freshStock = try await SupabaseService.shared.fetchStockData(symbol: stock.symbol)
+                        print("✅ Fetched fresh stock data: \(freshStock.currentPrice)")
+                        await MainActor.run {
+                            currentStock = freshStock
+                        }
+                    } catch {
+                        print("❌ Failed to fetch fresh stock data: \(error)")
+                    }
+                }
+            }
         }
     }
 }
@@ -265,25 +336,25 @@ struct ModernStockDetailHeader: View {
                     
                     // Price and Change
                     VStack(alignment: .leading, spacing: 6) {
+                        // Always show current price, not the crosshair price
                         SmoothPriceTransition(
-                            price: selectedPoint?.price ?? stock.currentPrice,
-                            isAnimating: selectedPoint != nil
+                            price: stock.currentPrice,
+                            isAnimating: false
                         )
                         
                         HStack(spacing: 8) {
-                            let changeFromCurrent = selectedPoint?.price ?? stock.currentPrice - stock.currentPrice
-                            let changePercent = (changeFromCurrent / stock.currentPrice) * 100
-                            let isPositive = changeFromCurrent >= 0
+                            // Always show current daily change, not crosshair change
+                            let isPositive = stock.dailyChange >= 0
                             
                             Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
                             
                             SmoothChangeText(
-                                change: changeFromCurrent,
-                                percent: changePercent,
+                                change: stock.dailyChange,
+                                percent: stock.dailyChangePercent,
                                 isPositive: isPositive,
-                                isAnimating: selectedPoint != nil
+                                isAnimating: false
                             )
                         }
                     }
@@ -927,187 +998,24 @@ struct SentimentLoadingView: View {
     }
 }
 
-// MARK: - Robinhood Style Chart Tab
-struct RobinhoodStyleChartTab: View {
+// MARK: - Professional Chart Tab
+struct ProfessionalChartTab: View {
     let stock: Stock
     @Binding var selectedPoint: ChartPoint?
     @StateObject private var themeManager = ThemeManager.shared
     @State private var selectedTimeframe: TimeFrame = .oneDay
-    @State private var chartData: [ChartPoint] = []
-    @State private var isLoading = false
-    @State private var showingPopup = false
-    @State private var dragLocation: CGPoint = .zero
-    @State private var popupOffset: CGSize = .zero
-    @State private var showCursor = false
-
     
     var body: some View {
         VStack(spacing: 0) {
-            // Fixed spacing for consistency (always present)
-            Rectangle()
-                .fill(Color.clear)
-                .frame(height: 1)
-                .padding(.vertical, 16)
+            // Chart Area
+            ProfessionalChartView(
+                stock: stock,
+                timeframe: selectedTimeframe,
+                selectedPoint: $selectedPoint
+            )
             
-            // Full-Width Chart Area with Fixed Height
-            GeometryReader { geometry in
-                ZStack {
-                    // Background frame to maintain consistent height
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(height: 350)
-                    
-                    if isLoading {
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .scaleEffect(1.2)
-                                .progressViewStyle(CircularProgressViewStyle(tint: .blue))
-                            
-                            Text("Loading chart data...")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        }
-                    } else {
-                        RobinhoodChart(
-                            data: chartData,
-                            selectedPoint: $selectedPoint,
-                            stock: stock,
-                            showingPopup: $showingPopup,
-                            dragLocation: $dragLocation
-                        )
-                    }
-                    
-                                    // Robinhood-style Crosshair
-                if showCursor, let selectedPoint = selectedPoint {
-                    let cursorY = (1 - CGFloat((selectedPoint.price - minPrice) / (maxPrice - minPrice))) * 350
-                    
-                    // Vertical Line
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 1)
-                        .position(x: dragLocation.x, y: 175)
-                    
-                    // Blue Dot on Graph Line
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                        )
-                        .position(x: dragLocation.x, y: cursorY)
-                }
-                }
-                .frame(height: 350) // Fixed height for entire chart area
-                .clipped() // Ensure content doesn't overflow
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            dragLocation = value.location
-                            showCursor = true
-                            updateSelectedPoint(at: value.location, in: geometry)
-                        }
-                        .onEnded { _ in
-                            showCursor = false
-                            selectedPoint = nil
-                        }
-                )
-            }
-            .frame(height: 350)
-            
-            Spacer()
-            
-            // Fixed Timeframe Buttons at Bottom
-            HStack(spacing: 0) {
-                ForEach(TimeFrame.allCases, id: \.self) { timeframe in
-                    TimeframeButton(
-                        timeframe: timeframe,
-                        isSelected: selectedTimeframe == timeframe,
-                        action: {
-                            selectedTimeframe = timeframe
-                            loadChartData()
-                        }
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+
         }
-        .onAppear {
-            loadChartData()
-        }
-    }
-    
-    private func getCursorY(for point: ChartPoint, in chartHeight: CGFloat) -> CGFloat {
-        guard !chartData.isEmpty else { return chartHeight / 2 }
-        
-        let minPrice = chartData.map(\.price).min() ?? point.price
-        let maxPrice = chartData.map(\.price).max() ?? point.price
-        
-        guard maxPrice != minPrice else { return chartHeight / 2 }
-        
-        return (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * chartHeight
-    }
-    
-    private func updateSelectedPoint(at location: CGPoint, in geometry: GeometryProxy) {
-        guard !chartData.isEmpty else { return }
-        
-        let normalizedX = max(0, min(1, location.x / geometry.size.width))
-        let index = Int(normalizedX * CGFloat(chartData.count - 1))
-        let clampedIndex = max(0, min(chartData.count - 1, index))
-        
-        selectedPoint = chartData[clampedIndex]
-    }
-    
-    private var minPrice: Double {
-        chartData.map(\.price).min() ?? stock.currentPrice
-    }
-    
-    private var maxPrice: Double {
-        chartData.map(\.price).max() ?? stock.currentPrice
-    }
-    
-    private func loadChartData() {
-        isLoading = true
-        selectedPoint = nil
-        
-        // Simulate loading
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            chartData = generateMockChartData(for: selectedTimeframe)
-            isLoading = false
-        }
-    }
-    
-    private func generateMockChartData(for timeframe: TimeFrame) -> [ChartPoint] {
-        let basePrice = stock.currentPrice
-        let count = timeframe == .oneDay ? 100 : (timeframe == .oneWeek ? 50 : 30)
-        var data: [ChartPoint] = []
-        var currentPrice = basePrice * 0.95
-        
-        for i in 0..<count {
-            let interval: TimeInterval
-            switch timeframe {
-            case .oneDay: interval = 240 // 4 minutes
-            case .oneWeek: interval = 7200 // 2 hours
-            default: interval = 86400 // 1 day
-            }
-            
-            let date = Date().addingTimeInterval(-interval * Double(count - i))
-            let trend = Double(i) / Double(count) * 0.08
-            let volatility = 0.005
-            let randomChange = Double.random(in: -volatility...volatility)
-            
-            currentPrice = currentPrice * (1 + trend/Double(count) + randomChange)
-            
-            if i == count - 1 {
-                currentPrice = basePrice
-            }
-            
-            data.append(ChartPoint(date: date, price: max(currentPrice, basePrice * 0.8)))
-        }
-        
-        return data
     }
 }
 
@@ -1143,149 +1051,9 @@ struct ChartPoint: Identifiable {
 
 
 
-// MARK: - Robinhood Chart
-struct RobinhoodChart: View {
-    let data: [ChartPoint]
-    @Binding var selectedPoint: ChartPoint?
-    let stock: Stock
-    @Binding var showingPopup: Bool
-    @Binding var dragLocation: CGPoint
-    @StateObject private var themeManager = ThemeManager.shared
-    @State private var showCursor = false
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Chart Background
-                Rectangle()
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-                
-                // Chart Line and Fill
-                if !data.isEmpty {
-                    // Fill Area with Blue Gradient
-                    Path { path in
-                        let points = data.enumerated().map { index, point in
-                            CGPoint(
-                                x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
-                                y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-                            )
-                        }
-                        
-                        path.move(to: CGPoint(x: points[0].x, y: geometry.size.height))
-                        path.addLine(to: points[0])
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                        path.addLine(to: CGPoint(x: points.last!.x, y: geometry.size.height))
-                        path.closeSubpath()
-                    }
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.blue.opacity(0.25),
-                                Color.blue.opacity(0.05),
-                                Color.blue.opacity(0.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    
-                    // Chart Line (Blue)
-                    Path { path in
-                        let points = data.enumerated().map { index, point in
-                            CGPoint(
-                                x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
-                                y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-                            )
-                        }
-                        
-                        path.move(to: points[0])
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
-                        }
-                    }
-                    .stroke(
-                        Color.blue,
-                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                    )
-                }
-                
-                // Interactive Cursor (highly optimized)
-                if showCursor, let selectedPoint = selectedPoint {
-                    let cursorX = dragLocation.x
-                    let cursorY = (1 - CGFloat((selectedPoint.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-                    
-                    // Vertical Line
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 1)
-                        .position(x: cursorX, y: geometry.size.height / 2)
-                        .allowsHitTesting(false)
-                    
-                    // Blue Dot on Graph Line
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                        )
-                        .position(x: cursorX, y: cursorY)
-                        .allowsHitTesting(false)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-    }
-    
-    private var minPrice: Double {
-        data.map(\.price).min() ?? 0
-    }
-    
-    private var maxPrice: Double {
-        data.map(\.price).max() ?? 1
-    }
-    
 
-    
-    private func updateSelectedPoint(at location: CGPoint, in geometry: GeometryProxy) {
-        let index = Int(location.x / geometry.size.width * CGFloat(data.count))
-        let clampedIndex = max(0, min(data.count - 1, index))
-        selectedPoint = data[clampedIndex]
-    }
-}
 
-// MARK: - Timeframe Button
-struct TimeframeButton: View {
-    let timeframe: TimeFrame
-    let isSelected: Bool
-    let action: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        Button(action: action) {
-            Text(timeframe.displayName)
-                .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
-                .foregroundColor(
-                    isSelected 
-                    ? .white
-                    : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(
-                            isSelected 
-                            ? Color.blue
-                            : Color.clear
-                        )
-                )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
+
 
 // MARK: - Comprehensive Analysis Tab
 struct ComprehensiveAnalysisTab: View {

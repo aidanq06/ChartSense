@@ -1,8 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+interface FinnhubQuoteResponse {
+  c: number;  // Current price
+  d: number;  // Change
+  dp: number; // Percent change
+  h: number;  // High price of the day
+  l: number;  // Low price of the day
+  o: number;  // Open price of the day
+  pc: number; // Previous close price
+  v?: number; // Volume
+}
+
+interface StockData {
+  symbol: string;
+  current_price: number;
+  daily_change: number;
+  daily_change_percent: number;
+  volume?: number;
+  last_updated: string;
 }
 
 serve(async (req) => {
@@ -12,11 +33,24 @@ serve(async (req) => {
   }
 
   try {
-    const { symbol } = await req.json()
+    // Initialize Supabase client
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    // Get Finnhub API key
+    const finnhubApiKey = Deno.env.get('FINNHUB_API_KEY')
+    if (!finnhubApiKey) {
+      throw new Error('FINNHUB_API_KEY environment variable is required')
+    }
+
+    // Parse request
+    const { symbol, symbols } = await req.json()
     
-    if (!symbol) {
+    if (!symbol && !symbols) {
       return new Response(
-        JSON.stringify({ error: 'Symbol is required' }),
+        JSON.stringify({ error: 'Either symbol or symbols array is required' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -24,74 +58,154 @@ serve(async (req) => {
       )
     }
 
-    // Check cache first
-    const cacheKey = `stock_${symbol.toUpperCase()}`
-    const cached = await getFromCache(cacheKey)
-    
-    if (cached) {
-      return new Response(
-        JSON.stringify(cached),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
+    // Handle single symbol or array of symbols
+    const symbolsToFetch = symbols || [symbol]
+    const results: StockData[] = []
+    const errors: string[] = []
 
-    // Fetch from Alpha Vantage (free tier)
-    const apiKey = Deno.env.get('ALPHA_VANTAGE_API_KEY')
-    if (!apiKey) {
-      throw new Error('Alpha Vantage API key not configured')
-    }
-
-    const response = await fetch(
-      `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${apiKey}`
-    )
+    // Process each symbol
+    for (const sym of symbolsToFetch) {
+      try {
+        console.log(`Fetching data for ${sym}`)
+        
+        // Fetch from Finnhub API
+        const finnhubUrl = `https://finnhub.io/api/v1/quote?symbol=${sym.toUpperCase()}&token=${finnhubApiKey}`
+        const response = await fetch(finnhubUrl)
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`)
+          if (response.status === 429) {
+            errors.push(`Rate limit exceeded for ${sym}`)
+            continue
+          }
+          throw new Error(`Finnhub API error: ${response.status}`)
     }
 
-    const data = await response.json()
+        const data: FinnhubQuoteResponse = await response.json()
     
-    if (data['Error Message']) {
-      throw new Error(data['Error Message'])
+        // Validate data
+        if (!data.c || data.c === 0) {
+          errors.push(`No data available for ${sym}`)
+          continue
+        }
+
+        // Prepare stock data
+        const stockData: StockData = {
+          symbol: sym.toUpperCase(),
+          current_price: data.c,
+          daily_change: data.d,
+          daily_change_percent: data.dp,
+          volume: data.v,
+          last_updated: new Date().toISOString()
+        }
+
+        // Get or create stock record
+        const { data: existingStock, error: stockError } = await supabaseClient
+          .from('stocks')
+          .select('id')
+          .eq('symbol', sym.toUpperCase())
+          .single()
+
+        if (stockError && stockError.code !== 'PGRST116') {
+          console.error(`Error fetching stock ${sym}:`, stockError)
+          errors.push(`Database error for ${sym}: ${stockError.message}`)
+          continue
     }
 
-    const quote = data['Global Quote']
-    if (!quote || Object.keys(quote).length === 0) {
-      throw new Error('No data found for symbol')
+        // If stock doesn't exist, create it
+        if (!existingStock) {
+          const { error: insertError } = await supabaseClient
+            .from('stocks')
+            .insert({
+              symbol: sym.toUpperCase(),
+              company_name: `${sym.toUpperCase()} Corporation`, // Will be updated later with real company data
+              is_active: true
+            })
+
+          if (insertError) {
+            console.error(`Error creating stock ${sym}:`, insertError)
+            errors.push(`Failed to create stock record for ${sym}`)
+            continue
+          }
+        }
+
+        // Upsert stock price data
+        const { error: priceError } = await supabaseClient
+          .from('stock_prices')
+          .upsert({
+            symbol: stockData.symbol,
+            current_price: stockData.current_price,
+            daily_change: stockData.daily_change,
+            daily_change_percent: stockData.daily_change_percent,
+            volume: stockData.volume,
+            last_updated: stockData.last_updated
+          }, {
+            onConflict: 'symbol'
+          })
+
+        if (priceError) {
+          console.error(`Error updating price for ${sym}:`, priceError)
+          errors.push(`Failed to update price for ${sym}: ${priceError.message}`)
+          continue
+        }
+
+        // Store historical data point
+        const { error: historyError } = await supabaseClient
+          .from('stock_history')
+          .upsert({
+            symbol: stockData.symbol,
+            date_time: stockData.last_updated,
+            open_price: data.o,
+            high_price: data.h,
+            low_price: data.l,
+            close_price: data.c,
+            volume: data.v || 0,
+            period: '1d'
+          }, {
+            onConflict: 'symbol,date_time,period'
+          })
+
+        if (historyError) {
+          console.log(`Warning: Could not store historical data for ${sym}:`, historyError.message)
+        }
+
+        results.push(stockData)
+        console.log(`Successfully processed ${sym}`)
+
+        // Add small delay to avoid rate limiting
+        if (symbolsToFetch.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+
+      } catch (error) {
+        console.error(`Error processing ${sym}:`, error)
+        errors.push(`Failed to process ${sym}: ${error.message}`)
+      }
     }
 
-    // Transform the response
-    const stockData = {
-      symbol: quote['01. symbol'],
-      companyName: quote['01. symbol'], // Alpha Vantage doesn't provide company name in this endpoint
-      currentPrice: parseFloat(quote['05. price'] || '0'),
-      dailyChange: parseFloat(quote['09. change'] || '0'),
-      dailyChangePercent: parseFloat(quote['10. change percent']?.replace('%', '') || '0'),
-      volume: parseInt(quote['06. volume'] || '0'),
-      lastUpdated: new Date().toISOString()
+    // Return results
+    const response = {
+      success: results.length > 0,
+      data: results,
+      errors: errors.length > 0 ? errors : undefined,
+      processed: results.length,
+      failed: errors.length,
+      timestamp: new Date().toISOString()
     }
-
-    // Cache the result for 5 minutes
-    await setCache(cacheKey, stockData, 300)
 
     return new Response(
-      JSON.stringify(stockData),
+      JSON.stringify(response),
       { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: results.length > 0 ? 200 : 207 // 207 Multi-Status if some failed
       }
     )
 
   } catch (error) {
-    console.error('Error fetching stock data:', error)
-    
+    console.error('Function error:', error)
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Failed to fetch stock data',
-        symbol: req.body?.symbol 
+        error: error.message,
+        timestamp: new Date().toISOString()
       }),
       { 
         status: 500, 
@@ -101,28 +215,28 @@ serve(async (req) => {
   }
 })
 
-// Simple in-memory cache (in production, use Redis or Supabase cache)
-const cache = new Map()
+/* Usage Examples:
 
-async function getFromCache(key: string) {
-  const cached = cache.get(key)
-  if (cached && Date.now() < cached.expiry) {
-    return cached.data
-  }
-  cache.delete(key)
-  return null
+1. Fetch single stock:
+POST /functions/v1/fetch-stock-data
+{
+  "symbol": "AAPL"
 }
 
-async function setCache(key: string, data: any, ttlSeconds: number) {
-  cache.set(key, {
-    data,
-    expiry: Date.now() + (ttlSeconds * 1000)
-  })
-  
-  // Clean up old entries
-  for (const [k, v] of cache.entries()) {
-    if (Date.now() > v.expiry) {
-      cache.delete(k)
-    }
-  }
-} 
+2. Fetch multiple stocks:
+POST /functions/v1/fetch-stock-data
+{
+  "symbols": ["AAPL", "TSLA", "GOOGL"]
+}
+
+3. Scheduled execution (via cron):
+This function can be called automatically every minute via pg_cron:
+SELECT cron.schedule('fetch-popular-stocks', '* * * * *', $$
+  SELECT net.http_post(
+    url := 'https://your-project.supabase.co/functions/v1/fetch-stock-data',
+    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY", "Content-Type": "application/json"}',
+    body := '{"symbols": ["AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"]}'
+  );
+$$);
+
+*/ 

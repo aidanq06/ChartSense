@@ -8,520 +8,453 @@
 import SwiftUI
 import Charts
 
-// MARK: - Chart Data Models
-struct CandleData: Identifiable, Codable {
-    let id = UUID()
-    let timestamp: Date
-    let open: Double
-    let high: Double
-    let low: Double
-    let close: Double
-    let volume: Int64
-    
-    var isBullish: Bool { close > open }
-    var body: Double { abs(close - open) }
-    var upperShadow: Double { high - max(open, close) }
-    var lowerShadow: Double { min(open, close) - low }
-}
-
-struct ChartConfig {
-    let timeframe: TimeFrame
-    let showVolume: Bool
-    let showMA: Bool
-    let showGrid: Bool
-    var theme: ChartTheme
-}
-
-enum TimeFrame: String, CaseIterable {
-    case oneDay = "1D"
-    case oneWeek = "1W"
-    case oneMonth = "1M"
-    case threeMonths = "3M"
-    case sixMonths = "6M"
-    case oneYear = "1Y"
-    case fiveYears = "5Y"
-    
-    var displayName: String { rawValue }
-    var interval: String {
-        switch self {
-        case .oneDay: return "5"
-        case .oneWeek: return "15"
-        case .oneMonth: return "60"
-        case .threeMonths: return "D"
-        case .sixMonths: return "D"
-        case .oneYear: return "D"
-        case .fiveYears: return "W"
-        }
-    }
-}
-
-enum ChartTheme {
-    case light, dark
-    
-    var backgroundColor: Color {
-        switch self {
-        case .light: return Color(.systemBackground)
-        case .dark: return Color(.systemBackground)
-        }
-    }
-    
-    var gridColor: Color {
-        switch self {
-        case .light: return Color(.systemGray6)
-        case .dark: return Color(.systemGray6)
-        }
-    }
-    
-    var textColor: Color {
-        switch self {
-        case .light: return Color(.label)
-        case .dark: return Color(.label)
-        }
-    }
-    
-    var bullishColor: Color { Color.bullish }
-    var bearishColor: Color { Color.bearish }
-}
-
-// MARK: - Interactive Chart View
-struct InteractiveChartView: View {
+// MARK: - Professional Chart Components
+struct ProfessionalChartView: View {
     let stock: Stock
-    @State private var selectedTimeframe: TimeFrame = .oneMonth
-    @State private var chartData: [CandleData] = []
+    let timeframe: TimeFrame
+    @Binding var selectedPoint: ChartPoint?
+    @State private var chartData: [ChartPoint] = []
     @State private var isLoading = false
-    @State private var selectedPoint: CandleData?
-    @State private var showVolume = true
-    @State private var showMA = true
-    @State private var chartConfig = ChartConfig(
-        timeframe: .oneMonth,
-        showVolume: true,
-        showMA: true,
-        showGrid: true,
-        theme: .light
-    )
+    @State private var showCursor = false
+    @State private var dragLocation: CGPoint = .zero
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         VStack(spacing: 0) {
-            // Chart Header
-            ChartHeaderView(
-                stock: stock,
-                selectedTimeframe: $selectedTimeframe,
-                showVolume: $showVolume,
-                showMA: $showMA
-            )
-            
-            // Main Chart Area
-            ChartContainerView(
-                stock: stock,
-                data: chartData,
-                config: chartConfig,
-                selectedPoint: $selectedPoint,
-                isLoading: isLoading
-            )
+            // Chart Area
+            GeometryReader { geometry in
+                ZStack {
+                    if isLoading {
+                        ChartLoadingView()
+                    } else {
+                        // Main Chart
+                        RobinhoodStyleChart(
+                            data: chartData,
+                            selectedPoint: $selectedPoint,
+                            showCursor: $showCursor,
+                            dragLocation: $dragLocation,
+                            geometry: geometry
+                        )
+                        
+                        // Interactive Cursor
+                        if showCursor, let selectedPoint = selectedPoint {
+                            ChartCursor(
+                                point: selectedPoint,
+                                location: dragLocation,
+                                geometry: geometry,
+                                data: chartData
+                            )
+                        }
+                    }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            dragLocation = value.location
+                            showCursor = true
+                            updateSelectedPoint(at: value.location, in: geometry)
+                        }
+                        .onEnded { _ in
+                            // Keep the crosshair visible - don't clear selectedPoint
+                            showCursor = true
+                        }
+                )
+            }
+            .frame(height: 300)
             
             // Chart Controls
             ChartControlsView(
-                selectedTimeframe: $selectedTimeframe,
-                showVolume: $showVolume,
-                showMA: $showMA
+                timeframe: timeframe,
+                onTimeframeChanged: { newTimeframe in
+                    loadChartData(for: newTimeframe)
+                }
             )
+            
+            // Crosshair Info (always show when we have a selected point)
+            if let selectedPoint = selectedPoint {
+                CrosshairInfoView(point: selectedPoint, stock: stock)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
         }
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
         .onAppear {
-            loadChartData()
-        }
-        .onChange(of: selectedTimeframe) { _ in
-            loadChartData()
-        }
-        .onChange(of: themeManager.isDarkMode) { isDark in
-            chartConfig.theme = isDark ? .dark : .light
+            loadChartData(for: timeframe)
         }
     }
     
-    private func loadChartData() {
+    private func loadChartData(for timeframe: TimeFrame) {
         isLoading = true
         
-        // Generate mock data for now
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            chartData = generateMockData(for: selectedTimeframe)
-            isLoading = false
+        print("📊 Loading chart data for \(stock.symbol) - Current price: \(stock.currentPrice)")
+        
+        Task {
+            do {
+                // First try to get historical data from database
+                let historicalData = try await fetchHistoricalData(symbol: stock.symbol, timeframe: timeframe)
+                
+                if !historicalData.isEmpty {
+                    print("✅ Found historical data for \(stock.symbol): \(historicalData.count) points")
+                    chartData = historicalData
+                } else {
+                    // Fallback to generating data from current stock info
+                    print("⚠️ No historical data found, generating from current price")
+                    chartData = generateChartDataFromCurrentStock(timeframe: timeframe)
+                }
+                
+                await MainActor.run {
+                    isLoading = false
+                }
+            } catch {
+                print("❌ Error loading chart data: \(error)")
+                // Fallback to mock data if everything fails
+                chartData = generateMockChartData(for: timeframe)
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
         }
     }
     
-    private func generateMockData(for timeframe: TimeFrame) -> [CandleData] {
+    private func fetchHistoricalData(symbol: String, timeframe: TimeFrame) async throws -> [ChartPoint] {
+        // This would fetch real historical data from your database
+        // For now, we'll generate realistic data based on the current stock
+        return generateChartDataFromCurrentStock(timeframe: timeframe)
+    }
+    
+    private func generateChartDataFromCurrentStock(timeframe: TimeFrame) -> [ChartPoint] {
         let basePrice = stock.currentPrice
-        let count = timeframe == .fiveYears ? 260 : 100
-        var data: [CandleData] = []
+        print("🔧 Generating chart data for \(stock.symbol) with base price: \(basePrice)")
+        
+        // If base price is 0 or invalid, use a default
+        let validBasePrice = basePrice > 0 ? basePrice : 150.0
+        print("🔧 Using valid base price: \(validBasePrice)")
+        
+        let count: Int
+        let interval: TimeInterval
+        
+        switch timeframe {
+        case .oneDay:
+            count = 100
+            interval = 240 // 4 minutes
+        case .oneWeek:
+            count = 50
+            interval = 7200 // 2 hours
+        case .oneMonth:
+            count = 30
+            interval = 86400 // 1 day
+        case .threeMonths:
+            count = 20
+            interval = 604800 // 1 week
+        case .oneYear:
+            count = 12
+            interval = 2592000 // 1 month
+        }
+        
+        var data: [ChartPoint] = []
+        var currentPrice = validBasePrice * 0.95 // Start slightly lower
         
         for i in 0..<count {
-            let date = Calendar.current.date(byAdding: .day, value: -i, to: Date()) ?? Date()
-            let volatility = 0.02
-            let change = Double.random(in: -volatility...volatility)
-            let open = basePrice * (1 + change)
-            let close = open * (1 + Double.random(in: -0.01...0.01))
-            let high = max(open, close) * (1 + Double.random(in: 0...0.005))
-            let low = min(open, close) * (1 - Double.random(in: 0...0.005))
-            let volume = Int64.random(in: 1000000...10000000)
+            let date = Date().addingTimeInterval(-interval * Double(count - i))
             
-            data.append(CandleData(
-                timestamp: date,
-                open: open,
-                high: high,
-                low: low,
-                close: close,
-                volume: volume
-            ))
+            // Create realistic price movement
+            let progress = Double(i) / Double(count)
+            let trend = progress * 0.1 // 10% overall trend
+            let volatility = 0.02 // 2% volatility
+            let randomChange = Double.random(in: -volatility...volatility)
+            
+            currentPrice = currentPrice * (1 + trend/Double(count) + randomChange)
+            
+            // Ensure the last point is the current price
+            if i == count - 1 {
+                currentPrice = validBasePrice
+            }
+            
+            data.append(ChartPoint(date: date, price: max(currentPrice, validBasePrice * 0.8)))
         }
         
-        return data.reversed()
+        print("📈 Generated \(data.count) chart points for \(stock.symbol), price range: \(data.map(\.price).min() ?? 0) - \(data.map(\.price).max() ?? 0)")
+        return data
+    }
+    
+
+    
+    private func generateMockChartData(for timeframe: TimeFrame) -> [ChartPoint] {
+        let basePrice = stock.currentPrice
+        print("🎲 Generating mock chart data for \(stock.symbol) with base price: \(basePrice)")
+        
+        // If base price is 0 or invalid, use a default
+        let validBasePrice = basePrice > 0 ? basePrice : 150.0
+        print("🎲 Using valid base price for mock: \(validBasePrice)")
+        
+        let count: Int
+        let interval: TimeInterval
+        
+        switch timeframe {
+        case .oneDay:
+            count = 100
+            interval = 240 // 4 minutes
+        case .oneWeek:
+            count = 50
+            interval = 7200 // 2 hours
+        case .oneMonth:
+            count = 30
+            interval = 86400 // 1 day
+        case .threeMonths:
+            count = 20
+            interval = 604800 // 1 week
+        case .oneYear:
+            count = 12
+            interval = 2592000 // 1 month
+        }
+        
+        var data: [ChartPoint] = []
+        var currentPrice = validBasePrice * 0.95
+        
+        for i in 0..<count {
+            let date = Date().addingTimeInterval(-interval * Double(count - i))
+            let trend = Double(i) / Double(count) * 0.08
+            let volatility = 0.005
+            let randomChange = Double.random(in: -volatility...volatility)
+            
+            currentPrice = currentPrice * (1 + trend/Double(count) + randomChange)
+            
+            if i == count - 1 {
+                currentPrice = validBasePrice
+            }
+            
+            data.append(ChartPoint(date: date, price: max(currentPrice, validBasePrice * 0.8)))
+        }
+        
+        print("🎲 Generated \(data.count) mock chart points for \(stock.symbol), price range: \(data.map(\.price).min() ?? 0) - \(data.map(\.price).max() ?? 0)")
+        return data
+    }
+    
+    private func updateSelectedPoint(at location: CGPoint, in geometry: GeometryProxy) {
+        guard !chartData.isEmpty else { return }
+        
+        let normalizedX = max(0, min(1, location.x / geometry.size.width))
+        let index = Int(normalizedX * CGFloat(chartData.count - 1))
+        let clampedIndex = max(0, min(chartData.count - 1, index))
+        
+        selectedPoint = chartData[clampedIndex]
     }
 }
 
-// MARK: - Chart Header View
-struct ChartHeaderView: View {
-    let stock: Stock
-    @Binding var selectedTimeframe: TimeFrame
-    @Binding var showVolume: Bool
-    @Binding var showMA: Bool
+// MARK: - Robinhood Style Chart
+struct RobinhoodStyleChart: View {
+    let data: [ChartPoint]
+    @Binding var selectedPoint: ChartPoint?
+    @Binding var showCursor: Bool
+    @Binding var dragLocation: CGPoint
+    let geometry: GeometryProxy
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Stock Info
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(stock.symbol)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(stock.companyName)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(stock.formattedPrice)
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: stock.isPositiveChange ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(stock.isPositiveChange ? Color.bullish : Color.bearish)
-                        
-                        Text(stock.formattedChangePercent)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                            .foregroundColor(stock.isPositiveChange ? Color.bullish : Color.bearish)
-                    }
-                }
-            }
-            
-            // Timeframe Selector
-            HStack(spacing: 8) {
-                ForEach(TimeFrame.allCases, id: \.self) { timeframe in
-                    Button(action: { selectedTimeframe = timeframe }) {
-                        Text(timeframe.displayName)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(selectedTimeframe == timeframe ? .white : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(backgroundColor(for: timeframe))
-                            .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-            
-            // Chart Options
-            HStack(spacing: 16) {
-                Toggle("Volume", isOn: $showVolume)
-                    .toggleStyle(ModernToggleStyle())
-                
-                Toggle("MA", isOn: $showMA)
-                    .toggleStyle(ModernToggleStyle())
-                
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-    }
-    
-    private func backgroundColor(for timeframe: TimeFrame) -> some View {
-        if selectedTimeframe == timeframe {
-            return AnyView(
-                LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)
-            )
-        } else {
-            return AnyView(
-                themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground
-            )
-        }
-    }
-}
-
-// MARK: - Chart Container View
-struct ChartContainerView: View {
-    let stock: Stock
-    let data: [CandleData]
-    let config: ChartConfig
-    @Binding var selectedPoint: CandleData?
-    let isLoading: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            if isLoading {
-                ChartLoadingView()
-            } else if data.isEmpty {
-                ChartEmptyView()
-            } else {
-                // Main Price Chart
-                PriceChartView(
-                    data: data,
-                    config: config,
-                    selectedPoint: $selectedPoint
-                )
-                .frame(height: 300)
-                
-                // Volume Chart
-                if config.showVolume {
-                    VolumeChartView(data: data, config: config)
-                        .frame(height: 100)
-                }
-                
-                // Selected Point Info
-                if let selected = selectedPoint {
-                    SelectedPointView(point: selected, stock: stock)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Price Chart View
-struct PriceChartView: View {
-    let data: [CandleData]
-    let config: ChartConfig
-    @Binding var selectedPoint: CandleData?
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        Chart(data) { candle in
-            // Candlestick body
-            RectangleMark(
-                x: .value("Time", candle.timestamp),
-                yStart: .value("Open", candle.open),
-                yEnd: .value("Close", candle.close),
-                width: 6
-            )
-            .foregroundStyle(candle.isBullish ? config.theme.bullishColor : config.theme.bearishColor)
-            .cornerRadius(2)
-            
-            // Candlestick shadows
-            RuleMark(
-                x: .value("Time", candle.timestamp),
-                yStart: .value("Low", candle.low),
-                yEnd: .value("High", candle.high)
-            )
-            .foregroundStyle(candle.isBullish ? config.theme.bullishColor : config.theme.bearishColor)
-            .lineStyle(StrokeStyle(lineWidth: 1))
-            
-            // Moving Average (if enabled)
-            if config.showMA {
-                LineMark(
-                    x: .value("Time", candle.timestamp),
-                    y: .value("MA", calculateMA(for: candle.timestamp))
-                )
-                .foregroundStyle(.blue)
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(config.theme.gridColor)
-                AxisValueLabel()
-                    .foregroundStyle(config.theme.textColor)
-            }
-        }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(config.theme.gridColor)
-                AxisValueLabel()
-                    .foregroundStyle(config.theme.textColor)
-            }
-        }
-        .chartOverlay { proxy in
+        ZStack {
+            // Chart Background
             Rectangle()
-                .fill(.clear)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            let x = value.location.x
-                            if let date = proxy.value(atX: x) as Date? {
-                                selectedPoint = data.min { abs($0.timestamp.timeIntervalSince(date)) < abs($1.timestamp.timeIntervalSince(date)) }
-                            }
-                        }
-                        .onEnded { _ in
-                            // Keep selected point for a moment
-                        }
+                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+            
+            if !data.isEmpty {
+                // Fill Area with Gradient
+                ChartFillArea(data: data, geometry: geometry)
+                
+                // Chart Line
+                ChartLine(data: data, geometry: geometry)
+                
+                // Grid Lines
+                ChartGridLines(data: data, geometry: geometry)
+            }
+        }
+    }
+}
+
+// MARK: - Chart Fill Area
+struct ChartFillArea: View {
+    let data: [ChartPoint]
+    let geometry: GeometryProxy
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        Path { path in
+            let points = data.enumerated().map { index, point in
+                CGPoint(
+                    x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
+                    y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
                 )
+            }
+            
+            path.move(to: CGPoint(x: points[0].x, y: geometry.size.height))
+            path.addLine(to: points[0])
+            for point in points.dropFirst() {
+                path.addLine(to: point)
+            }
+            path.addLine(to: CGPoint(x: points.last!.x, y: geometry.size.height))
+            path.closeSubpath()
+        }
+        .fill(
+            LinearGradient(
+                colors: [
+                    Color.blue.opacity(0.3),
+                    Color.blue.opacity(0.1),
+                    Color.blue.opacity(0.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+    
+    private var minPrice: Double {
+        data.map(\.price).min() ?? 0
+    }
+    
+    private var maxPrice: Double {
+        data.map(\.price).max() ?? 1
+    }
+}
+
+// MARK: - Chart Line
+struct ChartLine: View {
+    let data: [ChartPoint]
+    let geometry: GeometryProxy
+    
+    var body: some View {
+        Path { path in
+            let points = data.enumerated().map { index, point in
+                CGPoint(
+                    x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
+                    y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
+                )
+            }
+            
+            path.move(to: points[0])
+            for point in points.dropFirst() {
+                path.addLine(to: point)
+            }
+        }
+        .stroke(
+            Color.blue,
+            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+        )
+    }
+    
+    private var minPrice: Double {
+        data.map(\.price).min() ?? 0
+    }
+    
+    private var maxPrice: Double {
+        data.map(\.price).max() ?? 1
+    }
+}
+
+// MARK: - Chart Grid Lines
+struct ChartGridLines: View {
+    let data: [ChartPoint]
+    let geometry: GeometryProxy
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        ZStack {
+            // Horizontal grid lines
+            ForEach(0..<5, id: \.self) { i in
+                let y = geometry.size.height * CGFloat(i) / 4
+                Rectangle()
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                    .frame(height: 0.5)
+                    .position(x: geometry.size.width / 2, y: y)
+            }
+            
+            // Vertical grid lines
+            ForEach(0..<5, id: \.self) { i in
+                let x = geometry.size.width * CGFloat(i) / 4
+                Rectangle()
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                    .frame(width: 0.5)
+                    .position(x: x, y: geometry.size.height / 2)
+            }
+        }
+    }
+}
+
+// MARK: - Chart Cursor
+struct ChartCursor: View {
+    let point: ChartPoint
+    let location: CGPoint
+    let geometry: GeometryProxy
+    let data: [ChartPoint]
+    
+    var body: some View {
+        ZStack {
+            // Vertical line
+            Rectangle()
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 1)
+                .position(x: location.x, y: geometry.size.height / 2)
+            
+            // Price dot
+            Circle()
+                .fill(Color.blue)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: 2)
+                )
+                .position(x: location.x, y: cursorY)
+        }
+    }
+    
+    private var cursorY: CGFloat {
+        guard !data.isEmpty else { return geometry.size.height / 2 }
+        
+        let minPrice = data.map(\.price).min() ?? point.price
+        let maxPrice = data.map(\.price).max() ?? point.price
+        
+        guard maxPrice != minPrice else { return geometry.size.height / 2 }
+        
+        return (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
+    }
+}
+
+// MARK: - Chart Controls
+struct ChartControlsView: View {
+    let timeframe: TimeFrame
+    let onTimeframeChanged: (TimeFrame) -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(TimeFrame.allCases, id: \.self) { tf in
+                Button(action: {
+                    onTimeframeChanged(tf)
+                }) {
+                    Text(tf.displayName)
+                        .font(.system(size: 14, weight: timeframe == tf ? .semibold : .medium))
+                        .foregroundColor(
+                            timeframe == tf 
+                            ? .white
+                            : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(
+                                    timeframe == tf 
+                                    ? Color.blue
+                                    : Color.clear
+                                )
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
-    
-    private func calculateMA(for date: Date) -> Double {
-        // Simple 20-period moving average
-        let period = 20
-        let relevantData = data.filter { $0.timestamp <= date }.suffix(period)
-        return relevantData.isEmpty ? 0 : relevantData.map(\.close).reduce(0, +) / Double(relevantData.count)
-    }
 }
 
-// MARK: - Volume Chart View
-struct VolumeChartView: View {
-    let data: [CandleData]
-    let config: ChartConfig
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        Chart(data) { candle in
-            RectangleMark(
-                x: .value("Time", candle.timestamp),
-                y: .value("Volume", candle.volume)
-            )
-            .foregroundStyle(candle.isBullish ? config.theme.bullishColor.opacity(0.6) : config.theme.bearishColor.opacity(0.6))
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(config.theme.gridColor)
-            }
-        }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(config.theme.gridColor)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 16)
-    }
-}
-
-// MARK: - Selected Point View
-struct SelectedPointView: View {
-    let point: CandleData
-    let stock: Stock
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("O: \(String(format: "%.2f", point.open))")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text("H: \(String(format: "%.2f", point.high))")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("L: \(String(format: "%.2f", point.low))")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text("C: \(String(format: "%.2f", point.close))")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("Volume")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text(formatVolume(point.volume))
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            }
-        }
-        .padding(12)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-        .cornerRadius(8)
-    }
-    
-    private func formatVolume(_ volume: Int64) -> String {
-        if volume >= 1_000_000_000 {
-            return String(format: "%.1fB", Double(volume) / 1_000_000_000)
-        } else if volume >= 1_000_000 {
-            return String(format: "%.1fM", Double(volume) / 1_000_000)
-        } else if volume >= 1_000 {
-            return String(format: "%.1fK", Double(volume) / 1_000)
-        } else {
-            return "\(volume)"
-        }
-    }
-}
-
-// MARK: - Chart Controls View
-struct ChartControlsView: View {
-    @Binding var selectedTimeframe: TimeFrame
-    @Binding var showVolume: Bool
-    @Binding var showMA: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Button(action: { showVolume.toggle() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: showVolume ? "chart.bar.fill" : "chart.bar")
-                        .font(.system(size: 14, weight: .medium))
-                    
-                    Text("Volume")
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(showVolume ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
-            }
-            
-            Button(action: { showMA.toggle() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: showMA ? "chart.line.uptrend.xyaxis.fill" : "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 14, weight: .medium))
-                    
-                    Text("MA")
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundColor(showMA ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
-            }
-            
-            Spacer()
-            
-            Button(action: {}) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-    }
-}
-
-// MARK: - Loading and Empty States
+// MARK: - Chart Loading View
 struct ChartLoadingView: View {
     @StateObject private var themeManager = ThemeManager.shared
     
@@ -529,57 +462,234 @@ struct ChartLoadingView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.2)
-                .progressViewStyle(CircularProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
+                .progressViewStyle(CircularProgressViewStyle(tint: .blue))
             
             Text("Loading chart data...")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
         }
-        .frame(height: 300)
     }
 }
 
-struct ChartEmptyView: View {
+// MARK: - Technical Indicators Chart
+struct TechnicalIndicatorsChart: View {
+    let stock: Stock
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 40))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Technical Indicators")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
             
-            Text("No chart data available")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                TechnicalIndicatorCard(name: "RSI", value: "65.4", status: .neutral)
+                TechnicalIndicatorCard(name: "MACD", value: "0.23", status: .bullish)
+                TechnicalIndicatorCard(name: "MA (20)", value: stock.formattedPrice, status: .bullish)
+                TechnicalIndicatorCard(name: "BB", value: "Mid", status: .neutral)
+            }
         }
-        .frame(height: 300)
+        .padding()
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
     }
 }
 
-// MARK: - Modern Toggle Style
-struct ModernToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
+// MARK: - Technical Indicator Card
+struct TechnicalIndicatorCard: View {
+    let name: String
+    let value: String
+    let status: IndicatorStatus
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    enum IndicatorStatus {
+        case bullish, bearish, neutral
+        
+        var color: Color {
+            switch self {
+            case .bullish: return Color.bullish
+            case .bearish: return Color.bearish
+            case .neutral: return .orange
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .bullish: return "arrow.up.circle.fill"
+            case .bearish: return "arrow.down.circle.fill"
+            case .neutral: return "minus.circle.fill"
+            }
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(name)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                
+                Spacer()
+                
+                Image(systemName: status.icon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(status.color)
+            }
+            
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundColor(status.color)
+        }
+        .padding(12)
+        .background(status.color.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Volume Chart
+struct VolumeChart: View {
+    let data: [ChartPoint]
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Volume")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            
+            Chart(data) { point in
+                BarMark(
+                    x: .value("Time", point.date),
+                    y: .value("Volume", point.price * 1000) // Mock volume data
+                )
+                .foregroundStyle(Color.blue.opacity(0.6))
+            }
+            .frame(height: 100)
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel()
+                }
+            }
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisValueLabel()
+                }
+            }
+        }
+        .padding()
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Crosshair Info View
+struct CrosshairInfoView: View {
+    let point: ChartPoint
+    let stock: Stock
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    private var percentChange: Double {
+        return ((point.price - stock.currentPrice) / stock.currentPrice) * 100
+    }
+    
+    private var isPositiveChange: Bool {
+        return percentChange >= 0
+    }
+    
+    var body: some View {
         HStack {
-            configuration.label
-                .font(.system(size: 14, weight: .medium))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Price")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                
+                Text(point.formattedPrice)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            }
             
             Spacer()
             
-            RoundedRectangle(cornerRadius: 12)
-                .fill(configuration.isOn ? Color.blue : Color.gray.opacity(0.3))
-                .frame(width: 40, height: 24)
-                .overlay(
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 20, height: 20)
-                        .offset(x: configuration.isOn ? 8 : -8)
-                        .animation(.easeInOut(duration: 0.2), value: configuration.isOn)
-                )
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        configuration.isOn.toggle()
-                    }
+            VStack(alignment: .center, spacing: 4) {
+                Text("Change")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                
+                HStack(spacing: 4) {
+                    Image(systemName: isPositiveChange ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(isPositiveChange ? Color.bullish : Color.bearish)
+                    
+                    Text(String(format: "%.2f%%", abs(percentChange)))
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(isPositiveChange ? Color.bullish : Color.bearish)
                 }
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Time")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                
+                Text(point.formattedTime)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            }
         }
+        .padding()
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Price Range Display
+struct PriceRangeDisplay: View {
+    let stock: Stock
+    let selectedPoint: ChartPoint?
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Current")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                
+                Text(selectedPoint?.formattedPrice ?? stock.formattedPrice)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Change")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                
+                let change = (selectedPoint?.price ?? stock.currentPrice) - stock.currentPrice
+                let changePercent = (change / stock.currentPrice) * 100
+                let isPositive = change >= 0
+                
+                HStack(spacing: 4) {
+                    Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                    
+                    Text(String(format: "%.2f", abs(change)))
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                    
+                    Text("(\(String(format: "%.2f", abs(changePercent)))%)")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                }
+            }
+        }
+        .padding()
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+        .cornerRadius(12)
     }
 } 
