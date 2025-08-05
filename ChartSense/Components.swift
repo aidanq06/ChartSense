@@ -604,61 +604,9 @@ struct MetricView: View {
     }
 }
 
-struct SearchBar: View {
-    @Binding var text: String
-    let placeholder: String
-    let onCommit: () -> Void
-    
-    @Environment(\.theme) private var theme
-    @State private var isEditing = false
-    
-    var body: some View {
-        HStack(spacing: theme.spacing.sm) {
-            HStack(spacing: theme.spacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(theme.colors.tertiaryText)
-                    .font(.body)
-                
-                TextField(placeholder, text: $text, onCommit: onCommit)
-                    .font(theme.typography.body)
-                    .primaryText(theme: theme)
-                    .onTapGesture {
-                        isEditing = true
-                    }
-                
-                if !text.isEmpty {
-                    Button(action: { text = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(theme.colors.tertiaryText)
-                            .font(.body)
-                    }
-                }
-            }
-            .padding(theme.spacing.md)
-            .background(theme.colors.secondaryBackground)
-            .cornerRadius(theme.cornerRadius.medium)
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.cornerRadius.medium)
-                    .stroke(
-                        isEditing ? theme.colors.primary : theme.colors.border,
-                        lineWidth: isEditing ? 2 : 1
-                    )
-            )
-            
-            if isEditing {
-                Button("Cancel") {
-                    text = ""
-                    isEditing = false
-                    hideKeyboard()
-                }
-                .font(theme.typography.body)
-                .foregroundColor(theme.colors.primary)
-                .transition(.move(edge: .trailing))
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: isEditing)
-    }
-}
+// MARK: - Legacy Search Bar (Deprecated - Use ModernDiscoverSearchBar instead)
+// This component has been replaced by the enhanced ModernDiscoverSearchBar in Views.swift
+// to eliminate overlapping search implementations and provide a unified, visually comprehensive experience.
 
 struct LoadingCard: View {
     @Environment(\.theme) private var theme
@@ -1097,60 +1045,9 @@ struct HomeWidgetCard<Content: View>: View {
     }
 }
 
-struct SearchWidget: View {
-    let data: SearchWidgetData
-    let onStockSelected: (Stock) -> Void
-    let onSearchTapped: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Search Bar
-            Button(action: onSearchTapped) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                    
-                    Text("Search stocks...")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                .cornerRadius(8)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Popular Stocks
-            if !data.popularStocks.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(data.popularStocks.prefix(4), id: \.symbol) { stock in
-                        Button(action: { onStockSelected(stock) }) {
-                            VStack(alignment: .center, spacing: 2) {
-                                Text(stock.symbol)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                
-                                Text(stock.formattedPrice)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
-        }
-    }
-}
+// MARK: - Legacy Search Widget (Deprecated - Use ModernDiscoverSearchBar instead)
+// This component has been replaced by the enhanced ModernDiscoverSearchBar in Views.swift
+// to eliminate overlapping search implementations and provide a unified, visually comprehensive experience.
 
 struct NewsWidget: View {
     let data: NewsWidgetData

@@ -260,6 +260,8 @@ class SentimentViewModel: ObservableObject {
 
 // MARK: - Watchlist View Model
 class WatchlistViewModel: ObservableObject {
+    static let shared = WatchlistViewModel()
+    
     @Published var watchlistItems: [WatchlistItem] = []
     @Published var watchlistItemsWithStock: [WatchlistItemWithStock] = []
     @Published var stockDetails: [String: Stock] = [:]
@@ -272,7 +274,7 @@ class WatchlistViewModel: ObservableObject {
     private let stockService = StockService.shared
     private let sentimentService = SentimentService.shared
     
-    init() {
+    private init() {
         Task { @MainActor in
             loadWatchlist()
         }
@@ -304,10 +306,34 @@ class WatchlistViewModel: ObservableObject {
         }
     }
     
+    // Check if stock is already in watchlist
+    func isStockInWatchlist(_ symbol: String) -> Bool {
+        return watchlistItems.contains { $0.symbol.uppercased() == symbol.uppercased() }
+    }
+    
     @MainActor
     func addToWatchlist(_ stock: Stock, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String = "above") {
+        print("🔄 WatchlistViewModel: Adding \(stock.symbol) to watchlist...")
+        
+        // Check if stock is already in watchlist
+        if isStockInWatchlist(stock.symbol) {
+            print("❌ WatchlistViewModel: \(stock.symbol) is already in watchlist")
+            self.errorMessage = "\(stock.symbol) is already in your watchlist"
+            return
+        }
+        
+        // Check watchlist limit for free users
+        let premiumManager = PremiumManager.shared
+        if !premiumManager.isPremium && watchlistItems.count >= 1 {
+            print("❌ WatchlistViewModel: Free user limit reached (1 stock)")
+            self.errorMessage = "Free users can only track 1 stock. Upgrade to Premium for unlimited watchlist!"
+            premiumManager.showingPremiumUpgrade = true
+            return
+        }
+        
         Task {
             do {
+                print("🔄 WatchlistViewModel: Calling Supabase service...")
                 try await supabaseService.addToWatchlist(
                     symbol: stock.symbol,
                     companyName: stock.companyName,
@@ -317,8 +343,13 @@ class WatchlistViewModel: ObservableObject {
                     alertType: alertType
                 )
                 
+                print("✅ WatchlistViewModel: Successfully added to Supabase, reloading watchlist...")
                 // Reload watchlist to get updated data
                 await loadWatchlist()
+                
+                print("✅ WatchlistViewModel: Sending notification to home screen...")
+                // Notify home screen to refresh
+                NotificationCenter.default.post(name: NSNotification.Name("WatchlistChanged"), object: nil)
                 
             } catch {
                 await MainActor.run {
@@ -337,6 +368,9 @@ class WatchlistViewModel: ObservableObject {
                 
                 // Reload watchlist to get updated data
                 await loadWatchlist()
+                
+                // Notify home screen to refresh
+                NotificationCenter.default.post(name: NSNotification.Name("WatchlistChanged"), object: nil)
                 
             } catch {
                 await MainActor.run {

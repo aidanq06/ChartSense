@@ -44,17 +44,10 @@ struct DiscoverView: View {
                                 ModernDiscoverLoadingView()
                             } else if searchViewModel.searchResults.isEmpty && !searchText.isEmpty {
                                 ModernEmptySearchView()
-                            } else {
-                                // Search Results or Default Content
-                                if !searchViewModel.searchResults.isEmpty {
-                                    ModernSearchResultsSection(results: searchViewModel.searchResults)
-                                } else if searchText.isEmpty {
-                                    ModernDefaultContent(
-                                        recentSearches: searchViewModel.recentSearches,
-                                        popularStocks: searchViewModel.popularStocks
-                                    )
-                                }
+                            } else if !searchViewModel.searchResults.isEmpty {
+                                ModernSearchResultsSection(results: searchViewModel.searchResults)
                             }
+                            // When searchText is empty, show nothing - clean slate
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100) // Tab bar spacing
@@ -99,10 +92,6 @@ struct ModernDiscoverHeader: View {
                     Text("Discover")
                         .font(.system(size: 32, weight: .bold, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? .white : .black)
-                    
-                    Text("Find stocks and analyze sentiment")
-                        .font(.system(size: 16, weight: .medium, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
                 }
                 
                 Spacer()
@@ -150,49 +139,166 @@ struct ModernDiscoverSearchBar: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var searchDebounce: Timer?
     @FocusState private var isFocused: Bool
+    @State private var shimmerOffset: CGFloat = -200
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+        ZStack {
+            // Animated background with gradient
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: isFocused ? 
+                            [
+                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
+                            ] :
+                            [
+                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white
+                            ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    // Animated border
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            LinearGradient(
+                                colors: isFocused ? 
+                                    [Color.blue.opacity(0.8), Color.purple.opacity(0.6), Color.cyan.opacity(0.4)] :
+                                    [Color.clear, Color.clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: isFocused ? 2 : 0
+                        )
+                )
+                .shadow(
+                    color: themeManager.isDarkMode ? 
+                        Color.black.opacity(0.3) : 
+                        Color.black.opacity(0.08),
+                    radius: isFocused ? 12 : 6,
+                    x: 0,
+                    y: isFocused ? 6 : 3
+                )
+                .frame(height: 44) // Fixed height for proper sizing
             
-            TextField("Search stocks...", text: $text)
-                .font(.system(size: 16, weight: .medium, design: .default))
-                .foregroundColor(themeManager.isDarkMode ? .white : .black)
-                .focused($isFocused)
-                .onChange(of: text) { newValue in
-                    // Debounce search
-                    searchDebounce?.invalidate()
-                    searchDebounce = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
-                        onSearch(newValue)
+            // Shimmer effect when focused
+            if isFocused {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                Color.white.opacity(0.1),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(height: 44) // Match the main container height
+                    .offset(x: shimmerOffset)
+                    .clipped()
+            }
+            
+            HStack(spacing: 6) {
+                // Enhanced search icon with multiple animations
+                ZStack {
+                    // Pulsing background circle
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: isFocused ? 
+                                    [Color.blue.opacity(0.3), Color.purple.opacity(0.2)] :
+                                    [Color.clear, Color.clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 20, height: 20)
+                    
+                    // Main icon background
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: isFocused ? 
+                                    [Color.blue.opacity(0.2), Color.purple.opacity(0.1)] :
+                                    [Color.clear, Color.clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 16, height: 16)
+                    
+                    // Search icon
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(isFocused ? 
+                            (themeManager.isDarkMode ? Color.blue : Color.blue) :
+                            (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
+                }
+                
+                // Enhanced text field with placeholder animation
+                TextField("Search stocks, companies, or symbols...", text: $text)
+                    .font(.system(size: 15, weight: .medium, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    .focused($isFocused)
+                    .onChange(of: text) { newValue in
+                        // Debounce search
+                        searchDebounce?.invalidate()
+                        searchDebounce = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                            onSearch(newValue)
+                        }
                     }
+                
+                Spacer()
+                
+                // Enhanced clear button with animations
+                if !text.isEmpty {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            text = ""
+                            onSearch("")
+                        }
+                    }) {
+                        ZStack {
+                            // Pulsing background
+                            Circle()
+                                .fill(Color.red.opacity(0.15))
+                                .frame(width: 16, height: 16)
+                            
+                            // Main button background
+                            Circle()
+                                .fill(Color.red.opacity(0.1))
+                                .frame(width: 14, height: 14)
+                            
+                            Image(systemName: "xmark")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(Color.red)
+                        }
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
-            
-            if !text.isEmpty {
-                Button(action: {
-                    text = ""
-                    onSearch("")
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .onAppear {
+            // Search bar ready
+        }
+        .onChange(of: isFocused) { focused in
+            if focused {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    shimmerOffset = 200
                 }
-                .transition(.scale.combined(with: .opacity))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    shimmerOffset = -200
+                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(themeManager.isDarkMode ? Color(.systemGray6) : .white)
-                .shadow(color: themeManager.isDarkMode ? .clear : Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(isFocused ? (themeManager.isDarkMode ? Color.blue : Color.blue) : Color.clear, lineWidth: 2)
-        )
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
+        .animation(.easeInOut(duration: 0.3), value: isFocused)
         .animation(.easeInOut(duration: 0.2), value: text.isEmpty)
     }
 }
@@ -202,17 +308,258 @@ struct ModernSearchResultsSection: View {
     let results: [Stock]
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateResults = false
+    @State private var shimmerOffset: CGFloat = -200
     
     var body: some View {
-        LazyVStack(spacing: 8) {
-            ForEach(Array(results.enumerated()), id: \.element.id) { index, stock in
-                ModernStockCard(stock: stock)
-                    .transition(.asymmetric(
-                        insertion: .scale.combined(with: .opacity),
-                        removal: .scale.combined(with: .opacity)
-                    ))
-                    .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05), value: results.count)
+        VStack(spacing: 16) {
+            // Enhanced header with animations
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Search Results")
+                        .font(.system(size: 24, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    Text("\(results.count) stocks found")
+                        .font(.system(size: 14, weight: .medium, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                // Animated results count badge
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                        .scaleEffect(animateResults ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateResults)
+                    
+                    Text("\(results.count)")
+                        .font(.system(size: 16, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(
+                        color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                        radius: 8,
+                        x: 0,
+                        y: 4
+                    )
+            )
+            
+            // Enhanced results list with staggered animations
+            LazyVStack(spacing: 12) {
+                ForEach(Array(results.enumerated()), id: \.element.id) { index, stock in
+                    EnhancedStockCard(stock: stock, index: index)
+                        .transition(.asymmetric(
+                            insertion: .scale.combined(with: .opacity).combined(with: .slide),
+                            removal: .scale.combined(with: .opacity)
+                        ))
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(index) * 0.1), value: results.count)
+                }
+            }
+        }
+        .onAppear {
+            animateResults = true
+            withAnimation(.easeInOut(duration: 0.5)) {
+                shimmerOffset = 200
+            }
+        }
+    }
+}
+
+// MARK: - Enhanced Stock Card
+struct EnhancedStockCard: View {
+    let stock: Stock
+    let index: Int
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    @State private var animateCard = false
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var shimmerOffset: CGFloat = -200
+    
+    private var sparklinePrices: [Double] {
+        return stock.sparklineData
+    }
+    
+    private var isPositiveChange: Bool {
+        return stock.dailyChangePercent >= 0
+    }
+    
+    var body: some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                appViewModel.selectStock(stock)
+            }
+        }) {
+            ZStack {
+                // Animated background with gradient
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: isPressed ? 
+                                [
+                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F0F0F0"),
+                                    themeManager.isDarkMode ? Color(hex: "3A3A3A") : Color(hex: "E8E8E8")
+                                ] :
+                                [
+                                    themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
+                                ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: isPositiveChange ? 
+                                        [Color.green.opacity(0.3), Color.blue.opacity(0.2)] :
+                                        [Color.red.opacity(0.3), Color.orange.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isPressed ? 2 : 1
+                            )
+                    )
+                    .shadow(
+                        color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.08),
+                        radius: isPressed ? 12 : 8,
+                        x: 0,
+                        y: isPressed ? 6 : 4
+                    )
+                    .scaleEffect(isPressed ? 0.98 : 1.0)
+                
+                // Shimmer effect on press
+                if isPressed {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .offset(x: shimmerOffset)
+                        .clipped()
+                }
+                
+                HStack(spacing: 16) {
+                    // Enhanced stock info section
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(stock.symbol)
+                                .font(.system(size: 18, weight: .bold, design: .default))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            
+                            // Animated change indicator
+                            ZStack {
+                                Circle()
+                                    .fill(isPositiveChange ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
+                                    .frame(width: 24, height: 24)
+                                    .scaleEffect(pulseScale)
+                                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: pulseScale)
+                                
+                                Image(systemName: isPositiveChange ? "arrow.up" : "arrow.down")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(isPositiveChange ? Color.green : Color.red)
+                            }
+                        }
+                        
+                        Text(stock.companyName)
+                            .font(.system(size: 14, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .lineLimit(1)
+                    }
+                    
+                    Spacer()
+                    
+                    // Enhanced price and change section
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text(stock.formattedPrice)
+                            .font(.system(size: 18, weight: .bold, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        
+                        HStack(spacing: 4) {
+                            Text(isPositiveChange ? "+" : "")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(isPositiveChange ? Color.green : Color.red)
+                            
+                            Text(String(format: "%.2f%%", abs(stock.dailyChangePercent)))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(isPositiveChange ? Color.green : Color.red)
+                        }
+                    }
+                    
+                    // Enhanced sparkline with animation
+                    VStack {
+                        MiniSparklineView(prices: sparklinePrices, isPositive: isPositiveChange)
+                            .frame(width: 60, height: 30)
+                            .scaleEffect(animateCard ? 1.05 : 1.0)
+                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateCard)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            animateCard = true
+            pulseScale = 1.0
+        }
+        .onLongPressGesture(minimumDuration: 0) { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+            if pressing {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    shimmerOffset = 200
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    shimmerOffset = -200
+                }
+            }
+        } perform: {
+            // Handle long press if needed
         }
     }
 }
@@ -275,13 +622,13 @@ struct ModernStockCard: View {
     }
     
     var body: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                appViewModel.selectStock(stock)
-            }
-        }) {
-            HStack(spacing: 0) {
-                // Left: Stock Symbol and Company Name
+        HStack(spacing: 0) {
+            // Left: Stock Symbol and Company Name (Clickable for stock selection)
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    appViewModel.selectStock(stock)
+                }
+            }) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(stock.symbol)
                         .font(.system(size: 16, weight: .semibold, design: .default))
@@ -293,10 +640,14 @@ struct ModernStockCard: View {
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
-                
-                // Right: Price
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Spacer()
+            
+            // Right: Price and Add Button
+            HStack(spacing: 8) {
+                // Price
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("$\(stock.currentPrice, specifier: "%.2f")")
                         .font(.system(size: 16, weight: .semibold, design: .default))
@@ -306,48 +657,56 @@ struct ModernStockCard: View {
                         .font(.system(size: 12, weight: .medium, design: .default))
                         .foregroundColor(isPositiveChange ? .green : .red)
                 }
-                .frame(width: 80, alignment: .trailing)
+                
+                // Add to Watchlist Button - Clean and Simple
+                Button(action: {
+                    print("🎯 BUTTON TAPPED! Adding \(stock.symbol) to watchlist...")
+                    
+                    // Simple haptic feedback
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    
+                    // Add to watchlist
+                    WatchlistViewModel.shared.addToWatchlist(stock)
+                    
+                    print("✅ addToWatchlist call completed")
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .frame(width: 44, height: 44)
+                        .background(Color.clear)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color(.systemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(themeManager.isDarkMode ? Color(.systemGray4) : Color(.systemGray5), lineWidth: 0.5)
-                    )
-            )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
+            .frame(width: 100, alignment: .trailing)
         }
-        .buttonStyle(PlainButtonStyle())
-        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(themeManager.isDarkMode ? Color(.systemGray4) : Color(.systemGray5), lineWidth: 0.5)
+                )
+        )
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
     }
 }
 
 // MARK: - Modern Default Content
 struct ModernDefaultContent: View {
-    let recentSearches: [String]
     let popularStocks: [Stock]
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         VStack(spacing: 32) {
-            // Recent Searches
-            if !recentSearches.isEmpty {
-                ModernRecentSearchesSection(searches: recentSearches)
-            }
-            
             // Popular Stocks
             if !popularStocks.isEmpty {
                 ModernPopularStocksSection(stocks: popularStocks)
             }
-            
-            // Market Insights Card
-            ModernMarketInsightsCard()
         }
     }
 }
@@ -556,36 +915,166 @@ struct ModernInsightCard: View {
 struct ModernDiscoverLoadingView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var isAnimating = false
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var shimmerOffset: CGFloat = -200
+    @State private var rotateAngle: Double = 0
+    @State private var loadingDots = ""
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 32) {
+            // Enhanced animated loading icon with multiple effects
             ZStack {
+                // Outer pulsing ring with gradient
                 Circle()
-                    .stroke(themeManager.isDarkMode ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 4)
-                    .frame(width: 60, height: 60)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.4), Color.purple.opacity(0.3), Color.cyan.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 100, height: 100)
+                    .scaleEffect(pulseScale)
+                    .rotationEffect(.degrees(rotateAngle))
+                    .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: pulseScale)
+                    .animation(.linear(duration: 6.0).repeatForever(autoreverses: false), value: rotateAngle)
                 
+                // Middle ring with different rotation
                 Circle()
-                    .trim(from: 0, to: 0.7)
-                    .stroke(themeManager.isDarkMode ? Color.blue : Color.blue, lineWidth: 4)
-                    .frame(width: 60, height: 60)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2.5
+                    )
+                    .frame(width: 75, height: 75)
+                    .scaleEffect(pulseScale * 0.9)
+                    .rotationEffect(.degrees(-rotateAngle * 0.7))
+                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: pulseScale)
+                    .animation(.linear(duration: 4.0).repeatForever(autoreverses: false), value: rotateAngle)
+                
+                // Inner animated progress circle
+                Circle()
+                    .trim(from: 0, to: 0.8)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue, Color.purple, Color.cyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+                    .frame(width: 50, height: 50)
                     .rotationEffect(.degrees(isAnimating ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isAnimating)
+                    .animation(.linear(duration: 1.2).repeatForever(autoreverses: false), value: isAnimating)
+                
+                // Center search icon
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(
+                        themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText
+                    )
+                    .scaleEffect(isAnimating ? 1.1 : 1.0)
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isAnimating)
             }
             
-            VStack(spacing: 8) {
-                Text("Searching stocks...")
-                    .font(.system(size: 18, weight: .semibold, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+            // Enhanced content section with animated background
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .shadow(
+                        color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                        radius: 10,
+                        x: 0,
+                        y: 5
+                    )
                 
-                Text("Finding the best matches for you")
-                    .font(.system(size: 14, weight: .medium, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                VStack(spacing: 16) {
+                    // Animated title with gradient
+                    Text("Searching stocks")
+                        .font(.system(size: 24, weight: .bold, design: .default))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText,
+                                    themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .scaleEffect(isAnimating ? 1.02 : 1.0)
+                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
+                    
+                    // Animated subtitle with dots
+                    HStack(spacing: 2) {
+                        Text("Finding the best matches for you")
+                            .font(.system(size: 16, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Text(loadingDots)
+                            .font(.system(size: 16, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    }
+                    
+                    // Animated progress indicators
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { index in
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.blue, Color.purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 8, height: 8)
+                                .scaleEffect(isAnimating ? 1.2 : 0.8)
+                                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true).delay(Double(index) * 0.2), value: isAnimating)
+                        }
+                    }
+                }
+                .padding(.vertical, 24)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 40)
         .onAppear {
             isAnimating = true
+            pulseScale = 1.0
+            rotateAngle = 0
+            
+            // Animate loading dots
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+                if loadingDots.count >= 3 {
+                    loadingDots = ""
+                } else {
+                    loadingDots += "."
+                }
+            }
         }
     }
 }
@@ -594,31 +1083,163 @@ struct ModernDiscoverLoadingView: View {
 struct ModernEmptySearchView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var isAnimating = false
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var shimmerOffset: CGFloat = -200
+    @State private var rotateAngle: Double = 0
     
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 60, weight: .light))
-                .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
-                .scaleEffect(isAnimating ? 1.1 : 1.0)
-                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
-            
-            VStack(spacing: 12) {
-                Text("No Results Found")
-                    .font(.system(size: 24, weight: .bold, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+        VStack(spacing: 32) {
+            // Enhanced animated search icon with multiple effects
+            ZStack {
+                // Outer pulsing ring
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2), Color.cyan.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .frame(width: 120, height: 120)
+                    .scaleEffect(pulseScale)
+                    .rotationEffect(.degrees(rotateAngle))
+                    .animation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true), value: pulseScale)
+                    .animation(.linear(duration: 8.0).repeatForever(autoreverses: false), value: rotateAngle)
                 
-                Text("Try searching for a different stock symbol or company name")
-                    .font(.system(size: 16, weight: .medium, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                // Middle ring
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 90, height: 90)
+                    .scaleEffect(pulseScale * 0.8)
+                    .rotationEffect(.degrees(-rotateAngle * 0.5))
+                    .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: pulseScale)
+                    .animation(.linear(duration: 6.0).repeatForever(autoreverses: false), value: rotateAngle)
+                
+                // Inner search icon with enhanced styling
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color.white,
+                                    themeManager.isDarkMode ? Color(hex: "3A3A3A") : Color(hex: "F8F9FA")
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 70, height: 70)
+                        .shadow(
+                            color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.1),
+                            radius: 8,
+                            x: 0,
+                            y: 4
+                        )
+                    
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundColor(
+                            themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText
+                        )
+                        .scaleEffect(isAnimating ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
+                }
+            }
+            
+            // Enhanced content section
+            VStack(spacing: 16) {
+                // Animated title with gradient
+                Text("No Results Found")
+                    .font(.system(size: 28, weight: .bold, design: .default))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText,
+                                themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .scaleEffect(isAnimating ? 1.02 : 1.0)
+                    .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: isAnimating)
+                
+                // Enhanced description with animated background
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
+                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.1)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(
+                            color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                            radius: 8,
+                            x: 0,
+                            y: 4
+                        )
+                    
+                    VStack(spacing: 12) {
+                        Text("Try searching for a different stock symbol or company name")
+                            .font(.system(size: 16, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                        
+                        // Animated suggestions
+                        HStack(spacing: 12) {
+                            ForEach(["AAPL", "TSLA", "MSFT", "GOOGL"], id: \.self) { symbol in
+                                Text(symbol)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F0F0F0"))
+                                    )
+                                    .scaleEffect(isAnimating ? 1.05 : 1.0)
+                                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true).delay(Double(symbol.hashValue % 4) * 0.2), value: isAnimating)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 20)
+                }
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .padding(.vertical, 40)
         .onAppear {
             isAnimating = true
+            pulseScale = 1.0
+            rotateAngle = 0
+            withAnimation(.easeInOut(duration: 0.5)) {
+                shimmerOffset = 200
+            }
         }
     }
 }
@@ -636,15 +1257,18 @@ struct HomeView: View {
     @State private var selectedCardIndex: Int?
     @State private var hoveredStockIndex: Int?
     @State private var showingAI = false
+    @State private var showingWatchlist = false
     
     var body: some View {
-        ZStack {
-            // Clean solid background
-            (themeManager.isDarkMode ? Color.black : Color.white)
-                .ignoresSafeArea()
+                        ZStack {
+                    // Clean solid background
+                    (themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                        .ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 0) {
+                VStack(spacing: 16) {
+
+                    
                     // Clean Header
                     CleanHeader()
                         .offset(y: animateHeader ? 0 : -8)
@@ -655,7 +1279,7 @@ struct HomeView: View {
                     MarketStatusBar()
                         .offset(y: animateHeader ? 0 : -4)
                         .opacity(animateHeader ? 1.0 : 0.0)
-                        .animation(.easeOut(duration: 0.7).delay(0.15), value: animateHeader)
+                        .animation(.easeOut(duration: 0.5).delay(0.1), value: animateHeader)
                     
                     // Sentiment-Focused Watchlist Section
                     SentimentFocusedWatchlistSection(
@@ -664,23 +1288,26 @@ struct HomeView: View {
                         onSelectStock: { stock in
                             appViewModel.selectedStock = stock
                             showingStockDetail = true
+                        },
+                        onEditWatchlist: {
+                            showingWatchlist = true
                         }
                     )
                     .offset(y: animateCards ? 0 : 15)
                     .opacity(animateCards ? 1.0 : 0.0)
-                    .animation(.easeOut(duration: 0.8), value: animateCards)
+                    .animation(.easeOut(duration: 0.3).delay(0.05), value: animateCards)
                     
                     // Sentiment Alerts with Enhanced Visuals
                     EnhancedSentimentAlertsSection(alerts: homeViewModel.sentimentAlerts)
                         .offset(y: animateCards ? 0 : 10)
                         .opacity(animateCards ? 1.0 : 0.0)
-                        .animation(.easeOut(duration: 0.8).delay(0.2), value: animateCards)
+                        .animation(.easeOut(duration: 0.3).delay(0.2), value: animateCards)
                     
                     // News Feed with Premium Design
                     PremiumNewsFeedSection(news: homeViewModel.newsItems)
                         .offset(y: animateCards ? 0 : 8)
                         .opacity(animateCards ? 1.0 : 0.0)
-                        .animation(.easeOut(duration: 0.8).delay(0.4), value: animateCards)
+                        .animation(.easeOut(duration: 0.3).delay(0.35), value: animateCards)
                     
                     // AI Summary with Unique Visuals
                     UniqueAISummarySection(
@@ -689,14 +1316,14 @@ struct HomeView: View {
                     )
                     .offset(y: animateCards ? 0 : 6)
                     .opacity(animateCards ? 1.0 : 0.0)
-                    .animation(.easeOut(duration: 0.8).delay(0.6), value: animateCards)
+                    .animation(.easeOut(duration: 0.3).delay(0.5), value: animateCards)
                     
-                    Spacer(minLength: 100)
+                    Spacer(minLength: 60)
                 }
                 .padding(.horizontal, 20)
             }
         }
-        .navigationBarHidden(true)
+            .navigationBarHidden(true)
         .sheet(isPresented: $showingStockDetail) {
             if let selectedStock = appViewModel.selectedStock {
                 ModernStockDetailView(stock: selectedStock)
@@ -709,20 +1336,30 @@ struct HomeView: View {
         .sheet(isPresented: $showingAI) {
             AIView()
         }
+        .sheet(isPresented: $showingWatchlist) {
+            ModernWatchlistView()
+        }
         .onAppear {
             // Load data first, then animate
             homeViewModel.loadData()
             
             // Smooth header animation
-            withAnimation(.easeOut(duration: 0.6)) {
+            withAnimation(.easeOut(duration: 0.4)) {
                 animateHeader = true
             }
             
             // Delayed card animation with better timing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                withAnimation(.easeOut(duration: 0.7)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeOut(duration: 0.6)) {
                     animateCards = true
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("WatchlistChanged"))) { _ in
+            // Refresh home screen when watchlist changes
+            print("🔄 HomeView: Received watchlist change notification, refreshing...")
+            Task {
+                await homeViewModel.refreshWatchlist()
             }
         }
         .refreshable {
@@ -737,7 +1374,7 @@ struct CleanHeader: View {
     @State private var animateAccent = false
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 // Custom accent line with unique animation
                 Rectangle()
@@ -760,26 +1397,10 @@ struct CleanHeader: View {
                 }
                 
                 Spacer()
-                
-                // Custom notification indicator
-                ZStack {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 12, height: 12)
-                        .scaleEffect(animateAccent ? 1.2 : 1.0)
-                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateAccent)
-                    
-                    Circle()
-                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
-                        .frame(width: 20, height: 20)
-                        .scaleEffect(animateAccent ? 1.5 : 1.0)
-                        .opacity(animateAccent ? 0.0 : 1.0)
-                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: animateAccent)
-                }
             }
         }
-        .padding(.top, 40)
-        .padding(.bottom, 16)
+        .padding(.top, 32)
+        .padding(.bottom, 12)
         .onAppear {
             animateAccent = true
         }
@@ -791,12 +1412,13 @@ struct SentimentFocusedWatchlistSection: View {
     let stocks: [Stock]
     let sentiments: [String: SentimentData]
     let onSelectStock: (Stock) -> Void
+    let onEditWatchlist: () -> Void
     @StateObject private var themeManager = ThemeManager.shared
     @State private var animateCards = false
     @State private var hoveredIndex: Int?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 18) {
             // Section Header with Unique Design
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -812,44 +1434,121 @@ struct SentimentFocusedWatchlistSection: View {
                 
                 Spacer()
                 
-                // Custom indicator
-                HStack(spacing: 4) {
-                    ForEach(0..<3) { index in
-                        Circle()
-                            .fill(index < stocks.count ? Color.blue : Color.gray.opacity(0.3))
-                            .frame(width: 6, height: 6)
-                            .scaleEffect(animateCards ? 1.0 : 0.8)
-                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateCards)
+                // Clean Edit Button
+                Button(action: onEditWatchlist) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        
+                        Text("Edit")
+                            .font(.system(size: 12, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.1) : AppTheme.light.colors.primary.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.3) : AppTheme.light.colors.primary.opacity(0.3), lineWidth: 1)
+                    )
                 }
             }
             
-            // Sentiment-Focused Stock Cards
-            LazyVStack(spacing: 16) {
-                ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
-                    SentimentFocusedStockCard(
-                        stock: stock,
-                        sentiment: sentiments[stock.symbol],
-                        isHovered: hoveredIndex == index,
-                        onTap: {
-                            onSelectStock(stock)
-                        },
-                        onHover: { isHovered in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                hoveredIndex = isHovered ? index : nil
-                            }
+            // Content based on watchlist state
+            if stocks.isEmpty {
+                // Empty Watchlist State
+                VStack(spacing: 16) {
+                    Image(systemName: "heart")
+                        .font(.system(size: 48, weight: .light))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .opacity(animateCards ? 1.0 : 0.0)
+                        .scaleEffect(animateCards ? 1.0 : 0.8)
+                        .animation(.easeOut(duration: 0.3).delay(0.1), value: animateCards)
+                    
+                    VStack(spacing: 8) {
+                        Text("Your Watchlist is Empty")
+                            .font(.system(size: 20, weight: .semibold, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .opacity(animateCards ? 1.0 : 0.0)
+                            .animation(.easeOut(duration: 0.3).delay(0.15), value: animateCards)
+                        
+                        Text("Add stocks to your watchlist to track their sentiment and market data")
+                            .font(.system(size: 14, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .multilineTextAlignment(.center)
+                            .opacity(animateCards ? 1.0 : 0.0)
+                            .animation(.easeOut(duration: 0.3).delay(0.2), value: animateCards)
+                    }
+                    
+                    Button(action: onEditWatchlist) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .medium))
+                            
+                            Text("Add Stocks")
+                                .font(.system(size: 14, weight: .semibold, design: .default))
                         }
-                    )
-                    .offset(x: animateCards ? 0 : -5)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        )
+                    }
                     .opacity(animateCards ? 1.0 : 0.0)
-                    .animation(.easeOut(duration: 0.6).delay(0.1 + Double(index) * 0.1), value: animateCards)
+                    .scaleEffect(animateCards ? 1.0 : 0.9)
+                    .animation(.easeOut(duration: 0.3).delay(0.25), value: animateCards)
+                }
+                .padding(.vertical, 28)
+            } else {
+                // Sentiment-Focused Stock Cards with Beautiful Staggered Animation
+                VStack(spacing: 12) {
+                    ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
+                        SentimentFocusedStockCard(
+                            stock: stock,
+                            sentiment: sentiments[stock.symbol],
+                            isHovered: hoveredIndex == index,
+                            onTap: {
+                                onSelectStock(stock)
+                            },
+                            onHover: { isHovered in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    hoveredIndex = isHovered ? index : nil
+                                }
+                            }
+                        )
+                        .offset(y: animateCards ? 0 : 100)
+                        .opacity(animateCards ? 1.0 : 0.0)
+                        .scaleEffect(animateCards ? 1.0 : 0.7)
+                        .blur(radius: animateCards ? 0 : 15)
+                        .rotation3DEffect(
+                            .degrees(animateCards ? 0 : 15),
+                            axis: (x: 1.0, y: 0.0, z: 0.0)
+                        )
+                        .animation(
+                            .spring(
+                                response: 0.15,
+                                dampingFraction: 0.9,
+                                blendDuration: 0.05
+                            ).delay(0.02 + Double(index) * 0.02),
+                            value: animateCards
+                        )
+                    }
                 }
             }
         }
         .padding(.top, 20)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                animateCards = true
+            // Start card animations immediately when section appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                    animateCards = true
+                }
             }
         }
     }
@@ -865,6 +1564,7 @@ struct SentimentFocusedStockCard: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var animateCard = false
     @State private var animateSparkline = false
+    @State private var shimmerOffset: CGFloat = -200
     
     var body: some View {
         Button(action: {
@@ -875,7 +1575,7 @@ struct SentimentFocusedStockCard: View {
             ZStack {
                 // Clean background with subtle design
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .fill(themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color.white)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
                             .stroke(
@@ -899,6 +1599,24 @@ struct SentimentFocusedStockCard: View {
                     .scaleEffect(isHovered ? 1.02 : 1.0)
                     .animation(.easeInOut(duration: 0.2), value: isHovered)
                 
+                // Beautiful shimmer effect when card appears
+                if animateCard {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.white.opacity(0.1),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .offset(x: shimmerOffset)
+                        .clipped()
+                }
+                
                 VStack(spacing: 0) {
                     // Header with ticker and price
                     HStack {
@@ -906,11 +1624,17 @@ struct SentimentFocusedStockCard: View {
                             Text(stock.symbol)
                                 .font(.system(size: 24, weight: .bold, design: .default))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .opacity(animateCard ? 1.0 : 0.0)
+                                .offset(y: animateCard ? 0 : 10)
+                                .animation(.easeOut(duration: 0.15).delay(0.02), value: animateCard)
                             
                             Text(stock.companyName)
                                 .font(.system(size: 14, weight: .medium, design: .default))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                                 .lineLimit(1)
+                                .opacity(animateCard ? 1.0 : 0.0)
+                                .offset(y: animateCard ? 0 : 8)
+                                .animation(.easeOut(duration: 0.15).delay(0.03), value: animateCard)
                         }
                         
                         Spacer()
@@ -919,6 +1643,9 @@ struct SentimentFocusedStockCard: View {
                             Text("$\(stock.currentPrice, specifier: "%.2f")")
                                 .font(.system(size: 22, weight: .bold, design: .default))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .opacity(animateCard ? 1.0 : 0.0)
+                                .offset(y: animateCard ? 0 : 10)
+                                .animation(.easeOut(duration: 0.15).delay(0.04), value: animateCard)
                             
                             HStack(spacing: 4) {
                                 Image(systemName: stock.dailyChangePercent >= 0 ? "arrow.up.right" : "arrow.down.right")
@@ -929,6 +1656,9 @@ struct SentimentFocusedStockCard: View {
                                     .font(.system(size: 16, weight: .semibold, design: .default))
                                     .foregroundColor(stock.dailyChangePercent >= 0 ? Color.green : Color.red)
                             }
+                            .opacity(animateCard ? 1.0 : 0.0)
+                            .offset(y: animateCard ? 0 : 8)
+                            .animation(.easeOut(duration: 0.15).delay(0.05), value: animateCard)
                         }
                     }
                     .padding(.horizontal, 24)
@@ -943,8 +1673,11 @@ struct SentimentFocusedStockCard: View {
                                     .font(.system(size: 10, weight: .bold, design: .default))
                                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                                     .tracking(1.0)
+                                    .opacity(animateCard ? 1.0 : 0.0)
+                                    .offset(y: animateCard ? 0 : 5)
+                                    .animation(.easeOut(duration: 0.6).delay(0.7), value: animateCard)
                                 
-                                HStack(spacing: 12) {
+        HStack(spacing: 12) {
                                     // Sentiment score
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("\(getSentimentScore())")
@@ -957,7 +1690,7 @@ struct SentimentFocusedStockCard: View {
                                     }
                                     
                                     // Sentiment confidence
-                                    VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                                         Text("\(getConfidenceScore())%")
                                             .font(.system(size: 16, weight: .bold, design: .default))
                                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
@@ -965,10 +1698,10 @@ struct SentimentFocusedStockCard: View {
                                         Text("Confidence")
                                             .font(.system(size: 12, weight: .medium, design: .default))
                                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                    }
-                                    
-                                    Spacer()
-                                    
+            }
+            
+            Spacer()
+            
                                     // Sentiment trend
                                     VStack(alignment: .trailing, spacing: 4) {
                                         HStack(spacing: 4) {
@@ -986,9 +1719,9 @@ struct SentimentFocusedStockCard: View {
                                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                                     }
                                 }
-                            }
-                            
-                            Spacer()
+                }
+                
+                Spacer()
                         }
                         
                         // Sentiment breakdown
@@ -998,31 +1731,46 @@ struct SentimentFocusedStockCard: View {
                                 score: getSocialScore(),
                                 color: Color.blue
                             )
+                            .opacity(animateCard ? 1.0 : 0.0)
+                            .offset(y: animateCard ? 0 : 10)
+                            .animation(.easeOut(duration: 0.6).delay(0.8), value: animateCard)
                             
                             SentimentBreakdownItem(
                                 title: "News",
                                 score: getNewsScore(),
                                 color: Color.purple
                             )
+                            .opacity(animateCard ? 1.0 : 0.0)
+                            .offset(y: animateCard ? 0 : 10)
+                            .animation(.easeOut(duration: 0.6).delay(0.9), value: animateCard)
                             
                             SentimentBreakdownItem(
                                 title: "Technical",
                                 score: getTechnicalScore(),
                                 color: Color.orange
                             )
+                            .opacity(animateCard ? 1.0 : 0.0)
+                            .offset(y: animateCard ? 0 : 10)
+                            .animation(.easeOut(duration: 0.6).delay(1.0), value: animateCard)
                         }
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
+                    .opacity(animateCard ? 1.0 : 0.0)
+                    .offset(y: animateCard ? 0 : 15)
+                    .animation(.easeOut(duration: 0.6).delay(0.6), value: animateCard)
                     
                     // Mini sparkline (smaller, less emphasized)
                     CustomSparklineView(data: stock.priceHistory)
                         .frame(height: 40)
                         .padding(.horizontal, 24)
                         .padding(.bottom, 16)
+                        .opacity(animateSparkline ? 1.0 : 0.0)
+                        .scaleEffect(animateSparkline ? 1.0 : 0.8)
+                        .animation(.easeOut(duration: 0.6).delay(0.8), value: animateSparkline)
                     
                     // AI insight preview
-                    HStack {
+            HStack {
                         Image(systemName: "brain.head.profile")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color.purple)
@@ -1041,13 +1789,24 @@ struct SentimentFocusedStockCard: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.8)) {
+            // Trigger shimmer effect after card appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 animateCard = true
-            }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.easeInOut(duration: 1.2)) {
-                    animateSparkline = true
+                
+                // Animate shimmer
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    shimmerOffset = 200
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    shimmerOffset = -200
+                }
+                
+                // Animate sparkline
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        animateSparkline = true
+                    }
                 }
             }
         }
@@ -1107,7 +1866,7 @@ struct SentimentFocusedStockCard: View {
             return Color.green
         } else if sentiment.overallScore < -0.1 {
             return Color.red
-        } else {
+                    } else {
             return Color.orange
         }
     }
@@ -1182,7 +1941,7 @@ struct MarketStatusBar: View {
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color(hex: "F8F9FA"))
@@ -1468,14 +2227,16 @@ class EnhancedHomeViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
+    private let supabaseService = SupabaseService.shared
+    private let stockService = StockService.shared
+    private let sentimentService = SentimentService.shared
+    
     func loadData() {
         isLoading = true
         errorMessage = nil
         
-        // Simulate network delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            self.loadSampleData()
-            self.isLoading = false
+        Task {
+            await loadRealData()
         }
     }
     
@@ -1485,45 +2246,69 @@ class EnhancedHomeViewModel: ObservableObject {
             errorMessage = nil
         }
         
-        // Simulate network request
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-        
-        await MainActor.run {
-            loadSampleData()
-            isLoading = false
-        }
+        await loadRealData()
     }
     
-    private func loadSampleData() {
-        // Sample watchlist stocks
-        watchlistStocks = [
-            Stock(symbol: "AAPL", companyName: "Apple Inc.", currentPrice: 175.43, dailyChange: 4.12, dailyChangePercent: 2.34),
-            Stock(symbol: "TSLA", companyName: "Tesla Inc.", currentPrice: 248.50, dailyChange: -3.15, dailyChangePercent: -1.25),
-            Stock(symbol: "MSFT", companyName: "Microsoft Corporation", currentPrice: 338.11, dailyChange: 2.92, dailyChangePercent: 0.87)
-        ]
+    // Method to refresh watchlist data specifically
+    func refreshWatchlist() async {
+        print("🔄 EnhancedHomeViewModel: Refreshing watchlist data...")
+        await loadRealData()
+        print("✅ EnhancedHomeViewModel: Watchlist data refreshed")
+    }
+    
+    @MainActor
+    private func loadRealData() async {
+        do {
+            // Load real watchlist data from Supabase
+            let watchlistItems = try await supabaseService.getWatchlistWithStockData()
+            
+            // Convert to Stock objects
+            let stocks = watchlistItems.compactMap { item -> Stock? in
+                guard let stock = item.stock else { return nil }
+                return stock
+            }
+            
+            // Update watchlist stocks
+            self.watchlistStocks = stocks
+            
+            // Load sentiment data for each stock
+            var sentiments: [String: SentimentData] = [:]
+            for stock in stocks {
+                // Use the getSentiment method which returns SentimentAnalysis
+                let sentimentAnalysis = sentimentService.getSentiment(for: stock.symbol)
+                sentiments[stock.symbol] = SentimentData(
+                    overallScore: sentimentAnalysis.score,
+                    confidence: sentimentAnalysis.confidence,
+                    sources: []
+                )
+            }
+            
+            self.stockSentiments = sentiments
+            
+            // Load sample alerts and news for now
+            self.sentimentAlerts = [
+                SentimentAlert(symbol: "TSLA", message: "TSLA sentiment dropped 22% in 6h", change: -22, severity: "high", timeAgo: "2h ago"),
+                SentimentAlert(symbol: "AAPL", message: "AAPL sentiment improved 15% in 4h", change: 15, severity: "medium", timeAgo: "4h ago")
+            ]
+            
+            self.newsItems = [
+                NewsItem(headline: "Apple Reports Strong Q4 Earnings, Beats Expectations", summary: "Apple Inc. reported strong fourth-quarter earnings that exceeded analyst expectations.", source: "Reuters", publishedAt: Date().addingTimeInterval(-3600), url: "https://example.com", category: .earnings, sentiment: 0.8, relevanceScore: 0.9, imageURL: nil),
+                NewsItem(headline: "Tesla Faces Regulatory Scrutiny Over Safety Concerns", summary: "Tesla faces new regulatory scrutiny over safety concerns.", source: "Bloomberg", publishedAt: Date().addingTimeInterval(-10800), url: "https://example.com", category: .regulatory, sentiment: -0.6, relevanceScore: 0.8, imageURL: nil),
+                NewsItem(headline: "Microsoft Cloud Services See Record Growth", summary: "Microsoft's cloud services division reports record growth.", source: "CNBC", publishedAt: Date().addingTimeInterval(-18000), url: "https://example.com", category: .product, sentiment: 0.7, relevanceScore: 0.85, imageURL: nil)
+            ]
+            
+            self.marketSummary = "Markets are showing mixed signals today with tech stocks leading gains while energy sectors face pressure. Apple and Microsoft continue to benefit from strong earnings reports, while Tesla faces regulatory headwinds. Overall sentiment remains cautiously optimistic as investors await key economic data releases this week."
+            
+        } catch {
+            print("❌ Error loading real data: \(error)")
+            self.errorMessage = "Failed to load watchlist data"
+            
+            // Fallback to empty state
+            self.watchlistStocks = []
+            self.stockSentiments = [:]
+        }
         
-        // Sample sentiments using existing SentimentData structure
-        stockSentiments = [
-            "AAPL": SentimentData(overallScore: 0.75, confidence: 0.85, sources: []),
-            "TSLA": SentimentData(overallScore: -0.45, confidence: 0.72, sources: []),
-            "MSFT": SentimentData(overallScore: 0.12, confidence: 0.68, sources: [])
-        ]
-        
-        // Sample alerts
-        sentimentAlerts = [
-            SentimentAlert(symbol: "TSLA", message: "TSLA sentiment dropped 22% in 6h", change: -22, severity: "high", timeAgo: "2h ago"),
-            SentimentAlert(symbol: "AAPL", message: "AAPL sentiment improved 15% in 4h", change: 15, severity: "medium", timeAgo: "4h ago")
-        ]
-        
-        // Sample news using existing NewsItem structure
-        newsItems = [
-            NewsItem(headline: "Apple Reports Strong Q4 Earnings, Beats Expectations", summary: "Apple Inc. reported strong fourth-quarter earnings that exceeded analyst expectations.", source: "Reuters", publishedAt: Date().addingTimeInterval(-3600), url: "https://example.com", category: .earnings, sentiment: 0.8, relevanceScore: 0.9, imageURL: nil),
-            NewsItem(headline: "Tesla Faces Regulatory Scrutiny Over Safety Concerns", summary: "Tesla faces new regulatory scrutiny over safety concerns.", source: "Bloomberg", publishedAt: Date().addingTimeInterval(-10800), url: "https://example.com", category: .regulatory, sentiment: -0.6, relevanceScore: 0.8, imageURL: nil),
-            NewsItem(headline: "Microsoft Cloud Services See Record Growth", summary: "Microsoft's cloud services division reports record growth.", source: "CNBC", publishedAt: Date().addingTimeInterval(-18000), url: "https://example.com", category: .product, sentiment: 0.7, relevanceScore: 0.85, imageURL: nil)
-        ]
-        
-        // Sample market summary
-        marketSummary = "Markets are showing mixed signals today with tech stocks leading gains while energy sectors face pressure. Apple and Microsoft continue to benefit from strong earnings reports, while Tesla faces regulatory headwinds. Overall sentiment remains cautiously optimistic as investors await key economic data releases this week."
+        self.isLoading = false
     }
 } 
 
@@ -1583,7 +2368,7 @@ struct EnhancedSentimentAlertsSection: View {
     @State private var animateAlerts = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("SENTIMENT ALERTS")
                     .font(.system(size: 12, weight: .bold, design: .default))
@@ -1605,7 +2390,7 @@ struct EnhancedSentimentAlertsSection: View {
                 }
             }
             
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 8) {
                 ForEach(Array(alerts.prefix(3).enumerated()), id: \.element.id) { index, alert in
                     EnhancedSentimentAlertCard(alert: alert)
                         .offset(x: animateAlerts ? 0 : -20)
@@ -1614,7 +2399,7 @@ struct EnhancedSentimentAlertsSection: View {
                 }
             }
         }
-        .padding(.top, 20)
+        .padding(.top, 12)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 animateAlerts = true
@@ -1726,7 +2511,7 @@ struct PremiumNewsFeedSection: View {
     @State private var animateNews = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("MARKET NEWS")
                     .font(.system(size: 12, weight: .bold, design: .default))
@@ -1748,7 +2533,7 @@ struct PremiumNewsFeedSection: View {
                 }
             }
             
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 8) {
                 ForEach(Array(news.prefix(3).enumerated()), id: \.element.id) { index, newsItem in
                     PremiumNewsCard(newsItem: newsItem)
                         .offset(x: animateNews ? 0 : 20)
@@ -1757,7 +2542,7 @@ struct PremiumNewsFeedSection: View {
                 }
             }
         }
-        .padding(.top, 20)
+        .padding(.top, 12)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 animateNews = true
@@ -1864,7 +2649,7 @@ struct UniqueAISummarySection: View {
     @State private var animateButton = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("AI INSIGHTS")
                     .font(.system(size: 12, weight: .bold, design: .default))
@@ -1885,7 +2670,7 @@ struct UniqueAISummarySection: View {
                 }
             }
             
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(summary.isEmpty ? "Market sentiment analysis shows mixed signals across major indices. Tech stocks continue to lead with strong momentum, while traditional sectors show cautious optimism." : summary)
                     .font(.system(size: 16, weight: .medium, design: .default))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
@@ -1934,7 +2719,7 @@ struct UniqueAISummarySection: View {
                     .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: animateButton)
                 }
             }
-            .padding(24)
+            .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 20)
                     .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)

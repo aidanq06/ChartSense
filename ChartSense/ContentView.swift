@@ -137,7 +137,7 @@ struct CustomTabButton: View {
         Button(action: action) {
             if tab.isChartSenseLogo {
                 // ChartSense Logo - much larger and more prominent with blue border
-                Image(tab.icon)
+                Image(themeManager.isDarkMode ? "AppIconImageDark" : tab.icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: isSelected ? 44 : 40, height: isSelected ? 44 : 40)

@@ -209,9 +209,21 @@ class SupabaseService: ObservableObject {
     // MARK: - Watchlist Management
     
     func addToWatchlist(symbol: String, companyName: String, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String = "above") async throws {
-        guard let userId = currentUser?.id else { throw SupabaseError.notAuthenticated }
-        guard let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
+        print("🔄 SupabaseService: Adding \(symbol) to watchlist...")
+        print("🔄 SupabaseService: User authenticated: \(isAuthenticated)")
+        print("🔄 SupabaseService: Current user: \(currentUser?.id ?? "nil")")
+        print("🔄 SupabaseService: Access token: \(accessToken != nil ? "present" : "missing")")
+        
+        guard let userId = currentUser?.id else { 
+            print("❌ SupabaseService: User not authenticated")
+            throw SupabaseError.notAuthenticated 
+        }
+        guard let accessToken = accessToken else { 
+            print("❌ SupabaseService: Access token missing")
+            throw SupabaseError.notAuthenticated 
+        }
         guard let supabaseURL = supabaseURL else {
+            print("❌ SupabaseService: Supabase URL missing")
             throw SupabaseError.networkError
         }
         
@@ -255,13 +267,14 @@ class SupabaseService: ObservableObject {
             }
             
             if httpResponse.statusCode == 201 {
-                print("✅ Added \(symbol) to watchlist for user \(userId)")
+                print("✅ SupabaseService: Successfully added \(symbol) to watchlist for user \(userId)")
                 
                 // Track usage
                 try await incrementUsageTracking(featureType: "watchlist_add")
             } else {
                 let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                print("❌ Add to watchlist error response: \(errorBody)")
+                print("❌ SupabaseService: Add to watchlist error response: \(errorBody)")
+                print("❌ SupabaseService: HTTP status code: \(httpResponse.statusCode)")
                 
                 // Check if it's a foreign key constraint error
                 if errorBody.contains("user_profiles") && errorBody.contains("foreign key constraint") {

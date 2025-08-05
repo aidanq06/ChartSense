@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: - Modern Watchlist View
 struct ModernWatchlistView: View {
-    @StateObject private var viewModel = WatchlistViewModel()
+    @StateObject private var viewModel = WatchlistViewModel.shared
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingAddStock = false
@@ -71,7 +71,9 @@ struct ModernWatchlistView: View {
         }
         .sheet(isPresented: $showingAddStock) {
             ModernAddStockSheet { stock in
+                print("🎯 WATCHLIST SHEET: Adding \(stock.symbol) to watchlist...")
                 viewModel.addToWatchlist(stock)
+                print("✅ WATCHLIST SHEET: addToWatchlist call completed")
             }
         }
     }
@@ -128,7 +130,13 @@ struct ModernWatchlistHeader: View {
             }
             
             // Search Bar
-            ModernSearchBar(text: $searchText, placeholder: "Search watchlist...")
+            ModernDiscoverSearchBar(
+                text: $searchText,
+                onSearch: { query in
+                    // Handle search in watchlist context
+                    searchText = query
+                }
+            )
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -136,101 +144,9 @@ struct ModernWatchlistHeader: View {
     }
 }
 
-// MARK: - Modern Search Bar
-struct ModernSearchBar: View {
-    @Binding var text: String
-    let placeholder: String
-    @StateObject private var themeManager = ThemeManager.shared
-    @FocusState private var isFocused: Bool
-    @State private var animateSearch = false
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Enhanced search icon with animation
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: isFocused ? 
-                                [Color.blue.opacity(0.2), Color.purple.opacity(0.2)] :
-                                [Color.clear, Color.clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-                    .scaleEffect(animateSearch ? 1.1 : 1.0)
-                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateSearch)
-                
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(isFocused ? 
-                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) :
-                        (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
-            }
-            
-            // Enhanced text field
-            TextField(placeholder, text: $text)
-                .font(.system(size: 16, weight: .medium, design: .default))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                .focused($isFocused)
-                .onAppear {
-                    animateSearch = true
-                }
-            
-            // Enhanced clear button
-            if !text.isEmpty {
-                Button(action: { 
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        text = "" 
-                    }
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.red.opacity(0.1))
-                            .frame(width: 28, height: 28)
-                        
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(Color.red)
-                    }
-                }
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(themeManager.isDarkMode ? 
-                    Color(hex: "1A1A1A") : 
-                    Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            LinearGradient(
-                                colors: isFocused ? 
-                                    [Color.blue.opacity(0.6), Color.purple.opacity(0.6)] :
-                                    [Color.clear, Color.clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: isFocused ? 2 : 0
-                        )
-                )
-        )
-        .shadow(
-            color: themeManager.isDarkMode ? 
-                Color.black.opacity(0.3) : 
-                Color.black.opacity(0.08),
-            radius: isFocused ? 12 : 8,
-            x: 0,
-            y: isFocused ? 6 : 4
-        )
-        .scaleEffect(isFocused ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.3), value: isFocused)
-    }
-}
+// MARK: - Legacy Modern Search Bar (Deprecated - Use ModernDiscoverSearchBar instead)
+// This component has been replaced by the enhanced ModernDiscoverSearchBar in Views.swift
+// to eliminate overlapping search implementations and provide a unified, visually comprehensive experience.
 
 // MARK: - Modern Loading View
 struct ModernLoadingView: View {
@@ -550,9 +466,6 @@ struct ModernWatchlistCard: View {
             )
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
-            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                isPressed = pressing
-            }, perform: {})
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
@@ -584,6 +497,8 @@ struct ModernAddStockSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var searchViewModel = SearchViewModel()
     @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var watchlistViewModel = WatchlistViewModel.shared
+    @StateObject private var premiumManager = PremiumManager.shared
     
     var body: some View {
         NavigationView {
@@ -616,12 +531,37 @@ struct ModernAddStockSheet: View {
                     .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
                 
                 // Search Bar
-                ModernSearchBar(
+                ModernDiscoverSearchBar(
                     text: $searchViewModel.searchText,
-                    placeholder: "Search for stocks to add..."
+                    onSearch: { query in
+                        searchViewModel.searchText = query
+                    }
                 )
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
+                
+                // Watchlist Limit Indicator
+                if !premiumManager.isPremium {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Text("Free users can track 1 stock. Upgrade to Premium for unlimited watchlist!")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        Spacer()
+                        
+                        Button("Upgrade") {
+                            premiumManager.showingPremiumUpgrade = true
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                }
                 
                 // Results
                 if searchViewModel.isLoadingAllStocks {
@@ -690,10 +630,55 @@ struct ModernAddStockRow: View {
     let stock: Stock
     let onAdd: (Stock) -> Void
     @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var watchlistViewModel = WatchlistViewModel.shared
+    @StateObject private var premiumManager = PremiumManager.shared
     @State private var isPressed = false
     
+    // Computed properties for button state
+    private var isStockInWatchlist: Bool {
+        watchlistViewModel.isStockInWatchlist(stock.symbol)
+    }
+    
+    private var isLimitReached: Bool {
+        !premiumManager.isPremium && watchlistViewModel.watchlistItems.count >= 1
+    }
+    
+    private var buttonColor: Color {
+        if isStockInWatchlist {
+            return Color.gray
+        } else if isLimitReached {
+            return Color.orange
+        } else {
+            return Color.blue
+        }
+    }
+    
+    private var buttonIcon: String {
+        if isStockInWatchlist {
+            return "checkmark"
+        } else if isLimitReached {
+            return "crown"
+        } else {
+            return "plus"
+        }
+    }
+    
+    private var isButtonDisabled: Bool {
+        isStockInWatchlist || isLimitReached
+    }
+    
     var body: some View {
-        Button(action: { onAdd(stock) }) {
+        Button(action: { 
+            print("🎯 WATCHLIST ADD BUTTON TAPPED for \(stock.symbol)!")
+            
+            // Add haptic feedback
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+            
+            print("🔄 Calling onAdd callback...")
+            onAdd(stock)
+            print("✅ onAdd callback completed")
+        }) {
             HStack(spacing: 20) {
                 // Enhanced Stock Info
                 VStack(alignment: .leading, spacing: 8) {
@@ -744,23 +729,27 @@ struct ModernAddStockRow: View {
                 }
                 
                 // Enhanced Add Button
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.blue, Color.purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 36, height: 36)
+                Button(action: {
+                    print("🎯 ADD BUTTON TAPPED for \(stock.symbol)!")
                     
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
+                    // Add haptic feedback
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    
+                    onAdd(stock)
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(buttonColor)
+                            .frame(width: 36, height: 36)
+                        
+                        Image(systemName: buttonIcon)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
                 }
-                .scaleEffect(isPressed ? 0.9 : 1.0)
-                .animation(.easeInOut(duration: 0.1), value: isPressed)
+                .buttonStyle(PlainButtonStyle())
+                .disabled(isButtonDisabled)
             }
             .padding(20)
             .background(
@@ -770,29 +759,9 @@ struct ModernAddStockRow: View {
                         Color.white)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
             )
-            .shadow(
-                color: themeManager.isDarkMode ? 
-                    Color.black.opacity(0.2) : 
-                    Color.black.opacity(0.05),
-                radius: isPressed ? 12 : 8,
-                x: 0,
-                y: isPressed ? 6 : 4
-            )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
-            .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
-                isPressed = pressing
-            }, perform: {})
         }
         .buttonStyle(PlainButtonStyle())
     }
