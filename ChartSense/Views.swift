@@ -14,17 +14,53 @@ struct DiscoverView: View {
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingStockDetail = false
+    @State private var searchText = ""
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                DiscoverHeader()
+            ZStack {
+                // Background
+                (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+                    .ignoresSafeArea()
                 
-                // Search Content (Always visible)
-                SearchContent(viewModel: searchViewModel)
+                VStack(spacing: 0) {
+                    // Modern Header
+                    ModernDiscoverHeader()
+                    
+                    // Premium Search Bar
+                    ModernDiscoverSearchBar(
+                        text: $searchText,
+                        onSearch: { query in
+                            searchViewModel.searchText = query
+                        }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
+                    
+                    // Dynamic Content
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 24) {
+                            if searchViewModel.isLoading && searchViewModel.searchResults.isEmpty {
+                                ModernDiscoverLoadingView()
+                            } else if searchViewModel.searchResults.isEmpty && !searchText.isEmpty {
+                                ModernEmptySearchView()
+                            } else {
+                                // Search Results or Default Content
+                                if !searchViewModel.searchResults.isEmpty {
+                                    ModernSearchResultsSection(results: searchViewModel.searchResults)
+                                } else if searchText.isEmpty {
+                                    ModernDefaultContent(
+                                        recentSearches: searchViewModel.recentSearches,
+                                        popularStocks: searchViewModel.popularStocks
+                                    )
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100) // Tab bar spacing
+                    }
+                }
             }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
             .navigationBarHidden(true)
         }
         .sheet(isPresented: $showingStockDetail) {
@@ -42,944 +78,1122 @@ struct DiscoverView: View {
             }
         }
         .onAppear {
-            // Load initial data
             Task {
                 await searchViewModel.loadInitialData()
             }
         }
-    }
-}
-
-// MARK: - Stock Detail Sheet
-struct StockDetailSheet: View {
-    let stock: Stock
-    @ObservedObject var sentimentViewModel: SentimentViewModel
-    let onDismiss: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                StockDetailHeader(stock: stock, onDismiss: onDismiss)
-                
-                // Content
-                ScrollView {
-                    LazyVStack(spacing: 20) {
-                        // Stock Overview Card
-                        StockOverviewCard(stock: stock)
-                        
-                        // Sentiment Analysis
-                        if let sentiment = sentimentViewModel.sentiment {
-                            SentimentOverviewCard(sentiment: sentiment)
-                        }
-                        
-                        // News Section
-                        if !sentimentViewModel.newsItems.isEmpty {
-                            NewsOverviewSection(newsItems: sentimentViewModel.newsItems)
-                        }
-                        
-                        // Market Context
-                        if let marketContext = sentimentViewModel.marketContext {
-                            MarketContextCard(marketContext: marketContext)
-                        }
-                        
-                        // Analyst Consensus
-                        if let consensus = sentimentViewModel.analystConsensus {
-                            AnalystConsensusDetailCard(consensus: consensus)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 20)
-                }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-        .onAppear {
-            sentimentViewModel.loadData(for: stock)
+        .onChange(of: searchText) { newValue in
+            searchViewModel.searchText = newValue
         }
     }
 }
 
-struct StockDetailHeader: View {
-    let stock: Stock
-    let onDismiss: () -> Void
+// MARK: - Modern Discover Header
+struct ModernDiscoverHeader: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        HStack {
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    .frame(width: 32, height: 32)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                    .cornerRadius(8)
-            }
-            
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
-    }
-}
-
-struct DiscoverHeader: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 8) {
             HStack {
-                Text("Discover")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-    }
-}
-
-struct SearchContent: View {
-    @ObservedObject var viewModel: SearchViewModel
-    @EnvironmentObject private var appViewModel: AppViewModel
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Search Bar
-            SearchBar(
-                text: $viewModel.searchText,
-                placeholder: "Search stocks, ETFs...",
-                onCommit: {
-                    viewModel.performSearch()
-                }
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 20)
-            
-            // Content
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    if viewModel.isLoading {
-                        LoadingCard()
-                    } else if viewModel.hasSearched && viewModel.searchResults.isEmpty {
-                        EmptySearchCard()
-                    } else if !viewModel.searchResults.isEmpty {
-                        SearchResultsSection(
-                            results: viewModel.searchResults,
-                            onSelect: { stock in
-                                appViewModel.selectStock(stock)
-                            }
-                        )
-                    } else {
-                        // Default content when not searching
-                        if !viewModel.recentSearches.isEmpty {
-                            RecentSearchesSection(
-                                searches: viewModel.recentSearches,
-                                onSelect: viewModel.selectRecentSearch
-                            )
-                        }
-                        
-                        PopularStocksSection(
-                            stocks: viewModel.popularStocks,
-                            onSelect: { stock in
-                                appViewModel.selectStock(stock)
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 70) // Tab bar spacing
-            }
-        }
-    }
-}
-
-// MARK: - Search View
-struct SearchView: View {
-    @StateObject private var viewModel = SearchViewModel()
-    @EnvironmentObject private var appViewModel: AppViewModel
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Search Header
-                VStack(spacing: 16) {
-                    HStack {
-                        Text("ChartSense")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Spacer()
-                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Discover")
+                        .font(.system(size: 32, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .white : .black)
                     
-                    SearchBar(
-                        text: $viewModel.searchText,
-                        placeholder: "Search stocks, ETFs...",
-                        onCommit: { }
-                    )
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-                
-                // Content
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        if viewModel.isLoading {
-                            LoadingCard()
-                        } else if viewModel.hasSearched && viewModel.searchResults.isEmpty {
-                            EmptySearchCard()
-                        } else if !viewModel.searchResults.isEmpty {
-                            SearchResultsSection(
-                                results: viewModel.searchResults,
-                                onSelect: { stock in
-                                    appViewModel.selectStock(stock)
-                                }
-                            )
-                        } else {
-                            // Default content when not searching
-                            if !viewModel.recentSearches.isEmpty {
-                                RecentSearchesSection(
-                                    searches: viewModel.recentSearches,
-                                    onSelect: viewModel.selectRecentSearch
-                                )
-                            }
-                            
-                            PopularStocksSection(
-                                stocks: viewModel.popularStocks,
-                                isLoading: viewModel.isLoading,
-                                onSelect: { stock in
-                                    appViewModel.selectStock(stock)
-                                }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 70) // Tab bar spacing
-                }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-    }
-}
-
-struct SearchResultsSection: View {
-    let results: [Stock]
-    let onSelect: (Stock) -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(title: "Search Results", count: results.count)
-            
-            ForEach(results, id: \.symbol) { stock in
-                Button(action: { onSelect(stock) }) {
-                    StockListRow(stock: stock)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-    }
-}
-
-struct RecentSearchesSection: View {
-    let searches: [String]
-    let onSelect: (String) -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(title: "Recent Searches", count: nil)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(searches, id: \.self) { search in
-                        Button(action: { onSelect(search) }) {
-                            Text(search)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                                .cornerRadius(12)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .padding(.horizontal, -16)
-        }
-    }
-}
-
-struct PopularStocksSection: View {
-    let stocks: [Stock]
-    let isLoading: Bool
-    let onSelect: (Stock) -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    init(stocks: [Stock], isLoading: Bool = false, onSelect: @escaping (Stock) -> Void) {
-        self.stocks = stocks
-        self.isLoading = isLoading
-        self.onSelect = onSelect
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(title: "Popular Stocks", count: nil)
-            
-            if isLoading {
-                ForEach(0..<5, id: \.self) { _ in
-                    StockListRowSkeleton()
-                }
-            } else if stocks.isEmpty {
-                EmptyStateView(
-                    icon: "chart.line.uptrend.xyaxis",
-                    title: "No Popular Stocks",
-                    message: "Popular stocks will appear here once loaded.",
-                    actionTitle: "Refresh",
-                    action: {
-                        // This would trigger a refresh
-                    }
-                )
-            } else {
-                ForEach(stocks, id: \.symbol) { stock in
-                    Button(action: { onSelect(stock) }) {
-                        StockListRow(stock: stock)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-        }
-    }
-}
-
-struct EmptySearchCard: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NotionCard {
-            VStack(spacing: 16) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 50))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                
-                Text("No results found")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Text("Try a different search term or stock symbol")
-                    .font(.body)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(32)
-        }
-    }
-}
-
-// MARK: - Sentiment View
-struct SentimentView: View {
-    @StateObject private var viewModel = SentimentViewModel()
-    @EnvironmentObject private var appViewModel: AppViewModel
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                if let stock = viewModel.currentStock {
-                    SentimentHeader(stock: stock, onRefresh: viewModel.refreshData, onBack: {
-                        appViewModel.selectedTab = 0 // Go back to search
-                    })
-                } else {
-                    EmptyStateHeader()
-                }
-                
-                // Content
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        if let stock = viewModel.currentStock {
-                            SentimentContent(viewModel: viewModel)
-                        } else {
-                            EmptyStateContent()
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 70) // Tab bar spacing
-                }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-        .onReceive(appViewModel.$selectedStock) { stock in
-            if let stock = stock {
-                viewModel.loadData(for: stock)
-            }
-        }
-    }
-}
-
-struct SentimentHeader: View {
-    let stock: Stock
-    let onRefresh: () -> Void
-    let onBack: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                // Back Button
-                Button(action: onBack) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("Back")
-                            .font(.body)
-                            .fontWeight(.medium)
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    Text("Find stocks and analyze sentiment")
+                        .font(.system(size: 16, weight: .medium, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
                 }
                 
                 Spacer()
                 
-                // Stock Info
-                VStack(alignment: .trailing, spacing: 4) {
+                // Market Status Badge
+                ModernMarketStatusBadge()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 20)
+    }
+}
+
+// MARK: - Modern Market Status Badge
+struct ModernMarketStatusBadge: View {
+    @State private var isMarketOpen = true
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isMarketOpen ? Color.green : Color.red)
+                .frame(width: 6, height: 6)
+                .scaleEffect(isMarketOpen ? 1.2 : 1.0)
+                .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: isMarketOpen)
+            
+            Text(isMarketOpen ? "Market Open" : "Market Closed")
+                .font(.system(size: 12, weight: .semibold, design: .default))
+                .foregroundColor(isMarketOpen ? .green : .red)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(isMarketOpen ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+        )
+    }
+}
+
+// MARK: - Modern Discover Search Bar
+struct ModernDiscoverSearchBar: View {
+    @Binding var text: String
+    let onSearch: (String) -> Void
+    
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var searchDebounce: Timer?
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+            
+            TextField("Search stocks...", text: $text)
+                .font(.system(size: 16, weight: .medium, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                .focused($isFocused)
+                .onChange(of: text) { newValue in
+                    // Debounce search
+                    searchDebounce?.invalidate()
+                    searchDebounce = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+                        onSearch(newValue)
+                    }
+                }
+            
+            if !text.isEmpty {
+                Button(action: {
+                    text = ""
+                    onSearch("")
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(themeManager.isDarkMode ? Color(.systemGray6) : .white)
+                .shadow(color: themeManager.isDarkMode ? .clear : Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isFocused ? (themeManager.isDarkMode ? Color.blue : Color.blue) : Color.clear, lineWidth: 2)
+        )
+        .animation(.easeInOut(duration: 0.2), value: isFocused)
+        .animation(.easeInOut(duration: 0.2), value: text.isEmpty)
+    }
+}
+
+// MARK: - Modern Search Results Section
+struct ModernSearchResultsSection: View {
+    let results: [Stock]
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        LazyVStack(spacing: 8) {
+            ForEach(Array(results.enumerated()), id: \.element.id) { index, stock in
+                ModernStockCard(stock: stock)
+                    .transition(.asymmetric(
+                        insertion: .scale.combined(with: .opacity),
+                        removal: .scale.combined(with: .opacity)
+                    ))
+                    .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05), value: results.count)
+            }
+        }
+    }
+}
+
+// MARK: - Mini Sparkline View
+struct MiniSparklineView: View {
+    let prices: [Double]
+    let isPositive: Bool
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                guard prices.count > 1 else { return }
+                
+                let width = geometry.size.width
+                let height = geometry.size.height
+                
+                // Find min and max for scaling
+                let minPrice = prices.min() ?? 0
+                let maxPrice = prices.max() ?? 1
+                let priceRange = maxPrice - minPrice
+                
+                // Calculate points
+                let points = prices.enumerated().map { index, price in
+                    let x = (CGFloat(index) / CGFloat(prices.count - 1)) * width
+                    let normalizedPrice = priceRange > 0 ? (price - minPrice) / priceRange : 0.5
+                    let y = height - (normalizedPrice * height)
+                    return CGPoint(x: x, y: y)
+                }
+                
+                // Draw the line
+                path.move(to: points[0])
+                for point in points.dropFirst() {
+                    path.addLine(to: point)
+                }
+            }
+            .stroke(
+                isPositive ? Color.green : Color.red,
+                style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round)
+            )
+        }
+    }
+}
+
+// MARK: - Modern Stock Card
+struct ModernStockCard: View {
+    let stock: Stock
+    @EnvironmentObject private var appViewModel: AppViewModel
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    
+    // Use actual price history from stock model
+    private var sparklinePrices: [Double] {
+        return stock.sparklineData
+    }
+    
+    private var isPositiveChange: Bool {
+        return stock.dailyChangePercent >= 0
+    }
+    
+    var body: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                appViewModel.selectStock(stock)
+            }
+        }) {
+            HStack(spacing: 0) {
+                // Left: Stock Symbol and Company Name
+                VStack(alignment: .leading, spacing: 2) {
                     Text(stock.symbol)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .white : .black)
                     
                     Text(stock.companyName)
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .font(.system(size: 13, weight: .regular, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                        .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Spacer()
                 
-                // Refresh Button
-                Button(action: onRefresh) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.title2)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-    }
-}
-
-struct EmptyStateHeader: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Sentiment")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-    }
-}
-
-struct SentimentContent: View {
-    @ObservedObject var viewModel: SentimentViewModel
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Stock Quote Card
-            if let stock = viewModel.currentStock {
-                StockQuoteCard(stock: stock)
-            }
-            
-            // Sentiment Analysis Card
-            if viewModel.isLoadingSentiment {
-                LoadingCard()
-            } else if let sentiment = viewModel.sentiment {
-                SentimentCard(sentiment: sentiment)
-            }
-            
-            // News Categories Filter
-            if !viewModel.newsItems.isEmpty {
-                NewsCategoriesFilter(
-                    categories: viewModel.newsCategories(),
-                    selectedCategory: viewModel.selectedNewsCategory,
-                    onCategorySelected: { category in
-                        viewModel.selectedNewsCategory = category
-                    }
-                )
-            }
-            
-            // News Section
-            if viewModel.isLoadingNews {
-                LoadingCard()
-            } else if !viewModel.newsItems.isEmpty {
-                NewsSection(
-                    newsItems: viewModel.filteredNews(),
-                    onNewsItemTapped: viewModel.openNewsArticle
-                )
-            }
-            
-            // Analyst Consensus
-            if let consensus = viewModel.analystConsensus {
-                AnalystConsensusCard(consensus: consensus)
-            }
-            
-            // Market Context & Events
-            if let marketContext = viewModel.marketContext {
-                MarketContextSection(marketContext: marketContext)
-            }
-        }
-    }
-}
-
-struct EmptyStateContent: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NotionCard {
-            VStack(spacing: 24) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 60))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                
-                VStack(spacing: 8) {
-                    Text("Select a Stock")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                // Right: Price
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("$\(stock.currentPrice, specifier: "%.2f")")
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .white : .black)
                     
-                    Text("Choose a stock from the search tab to view its sentiment analysis and market insights")
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        .multilineTextAlignment(.center)
+                    Text("\(stock.dailyChangePercent, specifier: "%.1f")%")
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundColor(isPositiveChange ? .green : .red)
                 }
+                .frame(width: 80, alignment: .trailing)
             }
-            .padding(32)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color(.systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(themeManager.isDarkMode ? Color(.systemGray4) : Color(.systemGray5), lineWidth: 0.5)
+                    )
+            )
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            isPressed = pressing
+        }, perform: {})
+    }
+}
+
+// MARK: - Modern Default Content
+struct ModernDefaultContent: View {
+    let recentSearches: [String]
+    let popularStocks: [Stock]
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 32) {
+            // Recent Searches
+            if !recentSearches.isEmpty {
+                ModernRecentSearchesSection(searches: recentSearches)
+            }
+            
+            // Popular Stocks
+            if !popularStocks.isEmpty {
+                ModernPopularStocksSection(stocks: popularStocks)
+            }
+            
+            // Market Insights Card
+            ModernMarketInsightsCard()
         }
     }
 }
 
-// MARK: - Watchlist View
-struct WatchlistView: View {
-    @StateObject private var viewModel = WatchlistViewModel()
+// MARK: - Modern Recent Searches Section
+struct ModernRecentSearchesSection: View {
+    let searches: [String]
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recent Searches")
+                .font(.system(size: 20, weight: .bold, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? .white : .black)
+            
+            LazyVStack(spacing: 8) {
+                ForEach(searches.prefix(5), id: \.self) { search in
+                    ModernRecentSearchItem(search: search)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Modern Recent Search Item
+struct ModernRecentSearchItem: View {
+    let search: String
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            // Handle recent search tap
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: "clock")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                
+                Text(search)
+                    .font(.system(size: 16, weight: .medium, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                
+                Spacer()
+                
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color(.systemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(themeManager.isDarkMode ? Color(.systemGray4) : Color(.systemGray5), lineWidth: 0.5)
+                    )
+            )
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            isPressed = pressing
+        }, perform: {})
+    }
+}
+
+// MARK: - Modern Popular Stocks Section
+struct ModernPopularStocksSection: View {
+    let stocks: [Stock]
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                WatchlistHeader(
-                    onAddStock: { viewModel.showingAddStock = true },
-                    onRefresh: viewModel.refreshWatchlist
-                )
-                
-                // Content
-                if viewModel.isLoading {
-                    Spacer()
-                    ProgressView("Loading watchlist...")
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    Spacer()
-                } else if viewModel.watchlistItems.isEmpty {
-                    EmptyWatchlistView()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(viewModel.sortedWatchlistItems(), id: \.symbol) { item in
-                                WatchlistItemCard(
-                                    item: item,
-                                    stock: viewModel.stockDetails[item.symbol],
-                                    sentiment: viewModel.sentiments[item.symbol],
-                                    onSelect: { stock in
-                                        appViewModel.selectStock(stock)
-                                    },
-                                    onRemove: {
-                                        viewModel.removeFromWatchlist(item)
-                                    },
-                                    onToggleAlerts: {
-                                        viewModel.toggleAlerts(for: item.symbol)
-                                    }
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 70) // Tab bar spacing
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Popular Stocks")
+                .font(.system(size: 20, weight: .bold, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? .white : .black)
+            
+            LazyVStack(spacing: 8) {
+                ForEach(Array(stocks.prefix(10).enumerated()), id: \.element.id) { index, stock in
+                    ModernStockCard(stock: stock)
+                        .transition(.asymmetric(
+                            insertion: .scale.combined(with: .opacity),
+                            removal: .scale.combined(with: .opacity)
+                        ))
+                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05), value: stocks.count)
                 }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-        .sheet(isPresented: $viewModel.showingAddStock) {
-            AddStockSheet { stock in
-                viewModel.addToWatchlist(stock)
             }
         }
     }
 }
 
-struct WatchlistHeader: View {
-    let onAddStock: () -> Void
-    let onRefresh: () -> Void
+// MARK: - Modern Market Insights Card
+struct ModernMarketInsightsCard: View {
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var isAnimating = false
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Text("Watchlist")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                Text("Market Insights")
+                    .font(.system(size: 20, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
                 
                 Spacer()
                 
-                HStack(spacing: 16) {
-                    Button(action: onRefresh) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.title2)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    }
-                    
-                    Button(action: onAddStock) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    }
-                }
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(themeManager.isDarkMode ? .blue : .blue)
+            }
+            
+            // Market Stats Grid
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                ModernInsightCard(
+                    title: "Bullish Sentiment",
+                    value: "68%",
+                    trend: "+5.2%",
+                    color: .green,
+                    icon: "arrow.up.right"
+                )
+                
+                ModernInsightCard(
+                    title: "Market Volatility",
+                    value: "Medium",
+                    trend: "-2.1%",
+                    color: .orange,
+                    icon: "waveform.path.ecg"
+                )
+                
+                ModernInsightCard(
+                    title: "AI Confidence",
+                    value: "85%",
+                    trend: "+3.4%",
+                    color: .blue,
+                    icon: "brain.head.profile"
+                )
+                
+                ModernInsightCard(
+                    title: "News Sentiment",
+                    value: "Positive",
+                    trend: "+1.8%",
+                    color: .purple,
+                    icon: "newspaper"
+                )
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(themeManager.isDarkMode ? Color(.systemGray6) : .white)
+                .shadow(color: themeManager.isDarkMode ? .clear : Color.black.opacity(0.05), radius: 12, x: 0, y: 4)
+        )
+        .scaleEffect(isAnimating ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
+        .onAppear {
+            isAnimating = true
+        }
     }
 }
 
-struct EmptyWatchlistView: View {
+// MARK: - Modern Insight Card
+struct ModernInsightCard: View {
+    let title: String
+    let value: String
+    let trend: String
+    let color: Color
+    let icon: String
     @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(color)
+                
+                Spacer()
+                
+                Text(trend)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(trend.hasPrefix("+") ? .green : .red)
+            }
+            
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? .white : .black)
+            
+            Text(title)
+                .font(.system(size: 11, weight: .medium, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color(.systemGray5) : Color(.systemGray6))
+        )
+    }
+}
+
+// MARK: - Modern Discover Loading View
+struct ModernDiscoverLoadingView: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isAnimating = false
     
     var body: some View {
         VStack(spacing: 24) {
-            Spacer()
-            
-            NotionCard {
-                VStack(spacing: 24) {
-                    Image(systemName: "heart")
-                        .font(.system(size: 60))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    
-                    VStack(spacing: 8) {
-                        Text("Your Watchlist is Empty")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text("Add stocks you want to track for quick access to their sentiment and market data")
-                            .font(.body)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .padding(32)
+            ZStack {
+                Circle()
+                    .stroke(themeManager.isDarkMode ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 4)
+                    .frame(width: 60, height: 60)
+                
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(themeManager.isDarkMode ? Color.blue : Color.blue, lineWidth: 4)
+                    .frame(width: 60, height: 60)
+                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isAnimating)
             }
-            .padding(.horizontal, 16)
             
-            Spacer()
+            VStack(spacing: 8) {
+                Text("Searching stocks...")
+                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                
+                Text("Finding the best matches for you")
+                    .font(.system(size: 14, weight: .medium, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+        .onAppear {
+            isAnimating = true
         }
     }
 }
 
-// MARK: - Home View
-struct HomeView: View {
-    @StateObject private var viewModel = HomeViewModel()
-    @EnvironmentObject private var appViewModel: AppViewModel
+// MARK: - Modern Empty Search View
+struct ModernEmptySearchView: View {
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var isAnimating = false
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                HomeHeader(
-                    onCustomize: { viewModel.showingWidgetCustomization = true }
-                )
+        VStack(spacing: 24) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 60, weight: .light))
+                .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                .scaleEffect(isAnimating ? 1.1 : 1.0)
+                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
+            
+            VStack(spacing: 12) {
+                Text("No Results Found")
+                    .font(.system(size: 24, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
                 
-                // Widgets
-                if viewModel.isLoading {
-                    Spacer()
-                    ProgressView("Loading your dashboard...")
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    Spacer()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(viewModel.widgets.filter { $0.isEnabled }.sorted { $0.order < $1.order }, id: \.id) { widget in
-                                widgetView(for: widget)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 70) // Tab bar spacing
-                    }
-                }
+                Text("Try searching for a different stock symbol or company name")
+                    .font(.system(size: 16, weight: .medium, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? .gray : .secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
             }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
         }
-        .sheet(isPresented: $viewModel.showingWidgetCustomization) {
-            WidgetCustomizationView(viewModel: viewModel)
-        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
         .onAppear {
-            viewModel.loadWidgetData()
-        }
-    }
-    
-    @ViewBuilder
-    private func widgetView(for widget: HomeWidget) -> some View {
-        switch widget.type {
-        case .search:
-            if let data = viewModel.widgetData?.searchData {
-                HomeWidgetCard(widget: widget, onTap: {
-                    appViewModel.selectedTab = 1 // Switch to Discover tab
-                }) {
-                    SearchWidget(
-                        data: data,
-                        onStockSelected: { stock in
-                            appViewModel.selectStock(stock)
-                            appViewModel.selectedTab = 1 // Switch to Discover tab
-                        },
-                        onSearchTapped: {
-                            appViewModel.selectedTab = 1 // Switch to Discover tab
-                        }
-                    )
-                }
-            }
-            
-        case .news:
-            if let data = viewModel.widgetData?.newsData {
-                HomeWidgetCard(widget: widget, onTap: {
-                    // TODO: Navigate to full news view
-                }) {
-                    NewsWidget(
-                        data: data,
-                        onNewsTapped: { news in
-                            // TODO: Open news article
-                        }
-                    )
-                }
-            }
-            
-        case .watchlist:
-            if let data = viewModel.widgetData?.watchlistData {
-                HomeWidgetCard(widget: widget, onTap: {
-                    appViewModel.selectedTab = 3 // Switch to Watchlist tab
-                }) {
-                    WatchlistWidget(
-                        data: data,
-                        onStockTapped: { stock in
-                            appViewModel.selectStock(stock)
-                            appViewModel.selectedTab = 1 // Switch to Discover tab
-                        }
-                    )
-                }
-            }
-            
-        case .ai:
-            if let data = viewModel.widgetData?.aiData {
-                HomeWidgetCard(widget: widget, onTap: {
-                    appViewModel.selectedTab = 2 // Switch to AI tab
-                }) {
-                    AIWidget(
-                        data: data,
-                        onAITapped: {
-                            appViewModel.selectedTab = 2 // Switch to AI tab
-                        }
-                    )
-                }
-            }
-            
-        case .marketOverview:
-            if let data = viewModel.widgetData?.marketData {
-                HomeWidgetCard(widget: widget) {
-                    MarketOverviewWidget(data: data)
-                }
-            }
-            
-        case .trendingStocks:
-            if let data = viewModel.widgetData?.trendingData {
-                HomeWidgetCard(widget: widget) {
-                    TrendingStocksWidget(data: data)
-                }
-            }
+            isAnimating = true
         }
     }
 }
 
-struct HomeHeader: View {
-    let onCustomize: () -> Void
+
+
+// MARK: - Home View (Clean, Sentiment-Focused Design)
+struct HomeView: View {
+    @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var homeViewModel = EnhancedHomeViewModel()
+    @State private var showingStockDetail = false
+    @State private var animateHeader = false
+    @State private var animateCards = false
+    @State private var selectedCardIndex: Int?
+    @State private var hoveredStockIndex: Int?
+    @State private var showingAI = false
+    
+    var body: some View {
+        ZStack {
+            // Clean solid background
+            (themeManager.isDarkMode ? Color.black : Color.white)
+                .ignoresSafeArea()
+            
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Clean Header
+                    CleanHeader()
+                        .offset(y: animateHeader ? 0 : -8)
+                        .opacity(animateHeader ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.7), value: animateHeader)
+                    
+                    // Market Status Bar
+                    MarketStatusBar()
+                        .offset(y: animateHeader ? 0 : -4)
+                        .opacity(animateHeader ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.7).delay(0.15), value: animateHeader)
+                    
+                    // Sentiment-Focused Watchlist Section
+                    SentimentFocusedWatchlistSection(
+                        stocks: homeViewModel.watchlistStocks,
+                        sentiments: homeViewModel.stockSentiments,
+                        onSelectStock: { stock in
+                            appViewModel.selectedStock = stock
+                            showingStockDetail = true
+                        }
+                    )
+                    .offset(y: animateCards ? 0 : 15)
+                    .opacity(animateCards ? 1.0 : 0.0)
+                    .animation(.easeOut(duration: 0.8), value: animateCards)
+                    
+                    // Sentiment Alerts with Enhanced Visuals
+                    EnhancedSentimentAlertsSection(alerts: homeViewModel.sentimentAlerts)
+                        .offset(y: animateCards ? 0 : 10)
+                        .opacity(animateCards ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.8).delay(0.2), value: animateCards)
+                    
+                    // News Feed with Premium Design
+                    PremiumNewsFeedSection(news: homeViewModel.newsItems)
+                        .offset(y: animateCards ? 0 : 8)
+                        .opacity(animateCards ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.8).delay(0.4), value: animateCards)
+                    
+                    // AI Summary with Unique Visuals
+                    UniqueAISummarySection(
+                        summary: homeViewModel.marketSummary,
+                        onAskAI: { showingAI = true }
+                    )
+                    .offset(y: animateCards ? 0 : 6)
+                    .opacity(animateCards ? 1.0 : 0.0)
+                    .animation(.easeOut(duration: 0.8).delay(0.6), value: animateCards)
+                    
+                    Spacer(minLength: 100)
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showingStockDetail) {
+            if let selectedStock = appViewModel.selectedStock {
+                ModernStockDetailView(stock: selectedStock)
+                    .onDisappear {
+                        appViewModel.selectedStock = nil
+                        showingStockDetail = false
+                    }
+            }
+        }
+        .sheet(isPresented: $showingAI) {
+            AIView()
+        }
+        .onAppear {
+            // Load data first, then animate
+            homeViewModel.loadData()
+            
+            // Smooth header animation
+            withAnimation(.easeOut(duration: 0.6)) {
+                animateHeader = true
+            }
+            
+            // Delayed card animation with better timing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                withAnimation(.easeOut(duration: 0.7)) {
+                    animateCards = true
+                }
+            }
+        }
+        .refreshable {
+            await homeViewModel.refreshData()
+        }
+    }
+}
+
+// MARK: - Clean Header
+struct CleanHeader: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateAccent = false
     
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
+                // Custom accent line with unique animation
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue, Color.purple, Color.blue],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 4, height: 40)
+                    .scaleEffect(animateAccent ? 1.0 : 0.8)
+                    .opacity(animateAccent ? 1.0 : 0.6)
+                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateAccent)
+                
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Home")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                    Text("ChartSense")
+                        .font(.system(size: 36, weight: .bold, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text("Your personalized dashboard")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                 }
                 
                 Spacer()
                 
-                Button(action: onCustomize) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                        .padding(8)
-                        .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                        .cornerRadius(10)
+                // Custom notification indicator
+                ZStack {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 12, height: 12)
+                        .scaleEffect(animateAccent ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateAccent)
+                    
+                    Circle()
+                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                        .frame(width: 20, height: 20)
+                        .scaleEffect(animateAccent ? 1.5 : 1.0)
+                        .opacity(animateAccent ? 0.0 : 1.0)
+                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: animateAccent)
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.top, 40)
         .padding(.bottom, 16)
+        .onAppear {
+            animateAccent = true
+        }
     }
 }
 
-struct WidgetCustomizationView: View {
-    @ObservedObject var viewModel: HomeViewModel
-    @Environment(\.presentationMode) var presentationMode
+// MARK: - Sentiment-Focused Watchlist Section
+struct SentimentFocusedWatchlistSection: View {
+    let stocks: [Stock]
+    let sentiments: [String: SentimentData]
+    let onSelectStock: (Stock) -> Void
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateCards = false
+    @State private var hoveredIndex: Int?
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+        VStack(alignment: .leading, spacing: 24) {
+            // Section Header with Unique Design
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("WATCHLIST")
+                        .font(.system(size: 12, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .tracking(1.5)
                     
-                    Spacer()
-                    
-                    Text("Customize Home")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    Text("Your Market Focus")
+                        .font(.system(size: 20, weight: .semibold, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Spacer()
-                    
-                    Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
                 
-                Divider()
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                Spacer()
                 
-                // Widget List
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(HomeWidget.WidgetType.allCases, id: \.self) { widgetType in
-                            WidgetCustomizationRow(
-                                widgetType: widgetType,
-                                isEnabled: viewModel.widgets.contains { $0.type == widgetType && $0.isEnabled },
-                                onToggle: {
-                                    if let widget = viewModel.widgets.first(where: { $0.type == widgetType }) {
-                                        viewModel.toggleWidget(widget)
-                                    } else {
-                                        // Widget doesn't exist, add it
-                                        viewModel.addWidget(widgetType)
+                // Custom indicator
+                HStack(spacing: 4) {
+                    ForEach(0..<3) { index in
+                        Circle()
+                            .fill(index < stocks.count ? Color.blue : Color.gray.opacity(0.3))
+                            .frame(width: 6, height: 6)
+                            .scaleEffect(animateCards ? 1.0 : 0.8)
+                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateCards)
+                    }
+                }
+            }
+            
+            // Sentiment-Focused Stock Cards
+            LazyVStack(spacing: 16) {
+                ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
+                    SentimentFocusedStockCard(
+                        stock: stock,
+                        sentiment: sentiments[stock.symbol],
+                        isHovered: hoveredIndex == index,
+                        onTap: {
+                            onSelectStock(stock)
+                        },
+                        onHover: { isHovered in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                hoveredIndex = isHovered ? index : nil
+                            }
+                        }
+                    )
+                    .offset(x: animateCards ? 0 : -5)
+                    .opacity(animateCards ? 1.0 : 0.0)
+                    .animation(.easeOut(duration: 0.6).delay(0.1 + Double(index) * 0.1), value: animateCards)
+                }
+            }
+        }
+        .padding(.top, 20)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                animateCards = true
+            }
+        }
+    }
+}
+
+// MARK: - Sentiment-Focused Stock Card
+struct SentimentFocusedStockCard: View {
+    let stock: Stock
+    let sentiment: SentimentData?
+    let isHovered: Bool
+    let onTap: () -> Void
+    let onHover: (Bool) -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateCard = false
+    @State private var animateSparkline = false
+    
+    var body: some View {
+        Button(action: {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            onTap()
+        }) {
+            ZStack {
+                // Clean background with subtle design
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.blue.opacity(isHovered ? 0.3 : 0.1),
+                                        Color.purple.opacity(isHovered ? 0.3 : 0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isHovered ? 2 : 1
+                            )
+                    )
+                    .shadow(
+                        color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.05),
+                        radius: isHovered ? 15 : 8,
+                        x: 0,
+                        y: isHovered ? 8 : 4
+                    )
+                    .scaleEffect(isHovered ? 1.02 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isHovered)
+                
+                VStack(spacing: 0) {
+                    // Header with ticker and price
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(stock.symbol)
+                                .font(.system(size: 24, weight: .bold, design: .default))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            
+                            Text(stock.companyName)
+                                .font(.system(size: 14, weight: .medium, design: .default))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("$\(stock.currentPrice, specifier: "%.2f")")
+                                .font(.system(size: 22, weight: .bold, design: .default))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            
+                            HStack(spacing: 4) {
+                                Image(systemName: stock.dailyChangePercent >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(stock.dailyChangePercent >= 0 ? Color.green : Color.red)
+                                
+                                Text("\(stock.dailyChangePercent, specifier: "%.2f")%")
+                                    .font(.system(size: 16, weight: .semibold, design: .default))
+                                    .foregroundColor(stock.dailyChangePercent >= 0 ? Color.green : Color.red)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    
+                    // Sentiment Analysis Section (Emphasized)
+                    VStack(spacing: 16) {
+                        // Main sentiment indicator
+                        HStack {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("SENTIMENT ANALYSIS")
+                                    .font(.system(size: 10, weight: .bold, design: .default))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                    .tracking(1.0)
+                                
+                                HStack(spacing: 12) {
+                                    // Sentiment score
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(getSentimentScore())")
+                                            .font(.system(size: 28, weight: .bold, design: .default))
+                                            .foregroundColor(sentimentColor)
+                                        
+                                        Text(getSentimentLabel())
+                                            .font(.system(size: 14, weight: .semibold, design: .default))
+                                            .foregroundColor(sentimentColor)
+                                    }
+                                    
+                                    // Sentiment confidence
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(getConfidenceScore())%")
+                                            .font(.system(size: 16, weight: .bold, design: .default))
+                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                        
+                                        Text("Confidence")
+                                            .font(.system(size: 12, weight: .medium, design: .default))
+                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Sentiment trend
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: getSentimentTrendIcon())
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(getSentimentTrendColor())
+                                            
+                                            Text(getSentimentTrendText())
+                                                .font(.system(size: 14, weight: .semibold, design: .default))
+                                                .foregroundColor(getSentimentTrendColor())
+                                        }
+                                        
+                                        Text("vs Yesterday")
+                                            .font(.system(size: 12, weight: .medium, design: .default))
+                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                                     }
                                 }
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        // Sentiment breakdown
+                        HStack(spacing: 16) {
+                            SentimentBreakdownItem(
+                                title: "Social",
+                                score: getSocialScore(),
+                                color: Color.blue
+                            )
+                            
+                            SentimentBreakdownItem(
+                                title: "News",
+                                score: getNewsScore(),
+                                color: Color.purple
+                            )
+                            
+                            SentimentBreakdownItem(
+                                title: "Technical",
+                                score: getTechnicalScore(),
+                                color: Color.orange
                             )
                         }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    
+                    // Mini sparkline (smaller, less emphasized)
+                    CustomSparklineView(data: stock.priceHistory)
+                        .frame(height: 40)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 16)
+                    
+                    // AI insight preview
+                    HStack {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color.purple)
+                        
+                        Text("AI: \(getInsightPreview())")
+                            .font(.system(size: 12, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
                 }
             }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
         }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.8)) {
+                animateCard = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.easeInOut(duration: 1.2)) {
+                    animateSparkline = true
+                }
+            }
+        }
+    }
+    
+    // Sentiment helper functions
+    private func getSentimentScore() -> String {
+        guard let sentiment = sentiment else { return "N/A" }
+        let score = sentiment.overallScore
+        return score > 0 ? "+\(Int(score * 100))" : "\(Int(score * 100))"
+    }
+    
+    private func getSentimentLabel() -> String {
+        guard let sentiment = sentiment else { return "Neutral" }
+        let score = sentiment.overallScore
+        if score > 0.1 { return "Bullish" }
+        else if score < -0.1 { return "Bearish" }
+        else { return "Neutral" }
+    }
+    
+    private func getConfidenceScore() -> Int {
+        guard let sentiment = sentiment else { return 50 }
+        return Int(sentiment.confidence * 100)
+    }
+    
+    private func getSentimentTrendIcon() -> String {
+        let trend = Int.random(in: -1...1)
+        return trend > 0 ? "arrow.up" : trend < 0 ? "arrow.down" : "minus"
+    }
+    
+    private func getSentimentTrendText() -> String {
+        let trend = Int.random(in: -1...1)
+        return trend > 0 ? "+12%" : trend < 0 ? "-8%" : "0%"
+    }
+    
+    private func getSentimentTrendColor() -> Color {
+        let trend = Int.random(in: -1...1)
+        return trend > 0 ? Color.green : trend < 0 ? Color.red : Color.gray
+    }
+    
+    private func getSocialScore() -> Int {
+        return Int.random(in: 60...95)
+    }
+    
+    private func getNewsScore() -> Int {
+        return Int.random(in: 40...90)
+    }
+    
+    private func getTechnicalScore() -> Int {
+        return Int.random(in: 50...85)
+    }
+    
+    private var sentimentColor: Color {
+        guard let sentiment = sentiment else { return Color.gray }
+        
+        if sentiment.overallScore > 0.1 {
+            return Color.green
+        } else if sentiment.overallScore < -0.1 {
+            return Color.red
+        } else {
+            return Color.orange
+        }
+    }
+    
+    private func getInsightPreview() -> String {
+        let insights = [
+            "Strong momentum with positive sentiment",
+            "Technical indicators show bullish signals",
+            "Market sentiment remains neutral",
+            "Volume spike indicates increased interest",
+            "Support level holding strong"
+        ]
+        return insights.randomElement() ?? "Market analysis available"
     }
 }
 
-struct WidgetCustomizationRow: View {
-    let widgetType: HomeWidget.WidgetType
-    let isEnabled: Bool
-    let onToggle: () -> Void
+// MARK: - Sentiment Breakdown Item
+struct SentimentBreakdownItem: View {
+    let title: String
+    let score: Int
+    let color: Color
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: 16) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                        .frame(width: 40, height: 40)
-                    
-                    Image(systemName: widgetType.icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                }
-                
-                // Content
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(widgetType.title)
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(widgetType.description)
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                // Toggle
-                Toggle("", isOn: Binding(
-                    get: { isEnabled },
-                    set: { _ in onToggle() }
-                ))
-                .toggleStyle(SwitchToggleStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            
+            Text("\(score)%")
+                .font(.system(size: 16, weight: .bold, design: .default))
+                .foregroundColor(color)
         }
-        .buttonStyle(PlainButtonStyle())
-        
-        Divider()
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-            .padding(.leading, 76)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(color.opacity(0.1))
+        )
+    }
+}
+
+// MARK: - Market Status Bar
+struct MarketStatusBar: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateStatus = false
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Live indicator
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(animateStatus ? 1.2 : 1.0)
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateStatus)
+                
+                Text("LIVE")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundColor(Color.green)
+            }
+            
+            Text("Market Open")
+                .font(.system(size: 14, weight: .medium, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            
+            Spacer()
+            
+            // Market time
+            Text("9:30 AM - 4:00 PM ET")
+                .font(.system(size: 12, weight: .medium, design: .default))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color(hex: "F8F9FA"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            animateStatus = true
+        }
     }
 }
 
@@ -990,43 +1204,10 @@ struct AIView: View {
     }
 }
 
-struct AIHeader: View {
-    let onReset: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
+// MARK: - Settings View
+struct SettingsView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("AI Assistant")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text("Your financial intelligence companion")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                Button(action: onReset) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("New Chat")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                    .cornerRadius(12)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        ModernSettingsView()
     }
 }
 
@@ -1212,1139 +1393,579 @@ struct AuthView: View {
     }
 }
 
-// MARK: - Settings View
-struct SettingsView: View {
-    var body: some View {
-        ModernSettingsView()
-    }
-}
-
-// MARK: - Settings Components (Replaced by ModernSettingsView.swift)
-
-struct SettingsSection<Content: View>: View {
-    let title: String
-    let content: Content
+// MARK: - Premium Loading View
+struct PremiumLoadingView: View {
     @StateObject private var themeManager = ThemeManager.shared
-    
-    init(title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.content = content()
-    }
+    @State private var animateGradient = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                .padding(.horizontal, 4)
-            
-            content
-        }
-    }
-}
-
-struct SettingToggleCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    @Binding var isOn: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NotionCard {
-            HStack(spacing: 16) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                        .frame(width: 40, height: 40)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                }
-                
-                // Content
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                // Toggle
-                Toggle("", isOn: $isOn)
-                    .toggleStyle(SwitchToggleStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-            }
-        }
-    }
-}
-
-struct SettingPickerCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    @Binding var selection: String
-    let options: [(String, String)]
-    @StateObject private var themeManager = ThemeManager.shared
-    @State private var showingPicker = false
-    
-    var body: some View {
-        NotionCard {
-            Button(action: { showingPicker = true }) {
-                HStack(spacing: 16) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                    
-                    Spacer()
-                    
-                    // Current Value
-                    Text(selection)
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-        .sheet(isPresented: $showingPicker) {
-            SettingsPickerSheet(
-                title: title,
-                selection: $selection,
-                options: options
-            )
-        }
-    }
-}
-
-struct SettingActionCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let action: () -> Void
-    let destructive: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    init(title: String, subtitle: String, icon: String, action: @escaping () -> Void, destructive: Bool = false) {
-        self.title = title
-        self.subtitle = subtitle
-        self.icon = icon
-        self.action = action
-        self.destructive = destructive
-    }
-    
-    var body: some View {
-        NotionCard {
-            Button(action: action) {
-                HStack(spacing: 16) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill((destructive ? (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)).opacity(0.1))
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(destructive ? (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                    }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundColor(destructive ? (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error) : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                        
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-    }
-}
-
-struct SettingNavigationCard: View {
-    let title: String
-    let subtitle: String
-    let icon: String
-    let destination: AnyView
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationLink(destination: destination) {
-            NotionCard {
-                HStack(spacing: 16) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    }
-                    
-                    // Content
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                }
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - Settings Picker Sheet
-struct SettingsPickerSheet: View {
-    let title: String
-    @Binding var selection: String
-    let options: [(String, String)]
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    
-                    Spacer()
-                    
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Spacer()
-                    
-                    Button("Done") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-                
-                // Options List
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(options, id: \.0) { option in
-                            Button(action: {
-                                selection = option.0
-                                presentationMode.wrappedValue.dismiss()
-                            }) {
-                                HStack(spacing: 16) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(option.0)
-                                            .font(.body)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                        
-                                        Text(option.1)
-                                            .font(.caption)
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    if selection == option.0 {
-                                        Image(systemName: "checkmark")
-                                            .font(.body)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            if option.0 != options.last?.0 {
-                                Divider()
-                                    .padding(.leading, 56)
-                                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-                            }
-                        }
-                    }
-                }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-    }
-}
-
-// MARK: - Supporting Views and Components
-struct SectionHeader: View {
-    let title: String
-    let count: Int?
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            
-            if let count = count {
-                Text("\(count)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                    .cornerRadius(6)
-            }
-            
-            Spacer()
-        }
-        .padding(.bottom, 8)
-    }
-}
-
-struct StockListRow: View {
-    let stock: Stock
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            // Stock Info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(stock.symbol)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Text(stock.companyName)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    .lineLimit(1)
-            }
-            
+        VStack(spacing: 32) {
             Spacer()
             
-            // Price Info
-            VStack(alignment: .trailing, spacing: 4) {
-                if stock.currentPrice > 0 {
-                    HStack(spacing: 4) {
-                        Text(stock.formattedRealTimePrice)
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                            .foregroundColor(stock.hasRealTimeUpdate ? .green : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                        
-                        if stock.hasRealTimeUpdate {
-                            Image(systemName: "livephoto")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.green)
-                        }
-                    }
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: stock.dailyChange >= 0 ? "arrow.up.right" : "arrow.down.right")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
-                        
-                        Text(stock.formattedChange)
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
-                        
-                        Text("(\(String(format: "%.2f%%", stock.dailyChangePercent)))")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
-                    }
-                } else {
-                    HStack(spacing: 4) {
-                        Text("N/A")
-                            .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                    
-                    HStack(spacing: 4) {
-                        Text("N/A")
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
-        )
-        .shadow(
-            color: themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color,
-            radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
-            x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
-            y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
-        )
-    }
-}
-
-struct StockListRowSkeleton: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            // Stock Info skeleton
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .frame(width: 60, height: 16)
-                    .shimmer()
-                
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .frame(width: 120, height: 14)
-                    .shimmer()
-            }
-            
-            Spacer()
-            
-            // Price Info skeleton
-            VStack(alignment: .trailing, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .frame(width: 80, height: 16)
-                    .shimmer()
-                
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                        .frame(width: 60, height: 13)
-                        .shimmer()
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                        .frame(width: 70, height: 12)
-                        .shimmer()
-                }
-            }
-        }
-        .padding(16)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
-        )
-    }
-}
-
-// Placeholder views for complex components that would be implemented
-struct NewsCategoriesFilter: View {
-    let categories: [(category: NewsItem.NewsCategory, count: Int)]
-    let selectedCategory: NewsItem.NewsCategory?
-    let onCategorySelected: (NewsItem.NewsCategory?) -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Button("All") {
-                    onCategorySelected(nil)
-                }
-                .foregroundColor(selectedCategory == nil ? .white : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(selectedCategory == nil ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                .cornerRadius(12)
-                
-                ForEach(categories, id: \.category) { categoryInfo in
-                    Button("\(categoryInfo.category.rawValue) (\(categoryInfo.count))") {
-                        onCategorySelected(categoryInfo.category)
-                    }
-                    .foregroundColor(selectedCategory == categoryInfo.category ? .white : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(selectedCategory == categoryInfo.category ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                    .cornerRadius(12)
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.horizontal, -16)
-    }
-}
-
-struct NewsSection: View {
-    let newsItems: [NewsItem]
-    let onNewsItemTapped: (NewsItem) -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(title: "Latest News", count: newsItems.count)
-            
-            ForEach(newsItems) { newsItem in
-                NewsCard(newsItem: newsItem) {
-                    onNewsItemTapped(newsItem)
-                }
-            }
-        }
-    }
-}
-
-struct MarketContextSection: View {
-    let marketContext: MarketContext
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            SectionHeader(title: "Market Context", count: nil)
-            
-            // Upcoming Events
-            if !marketContext.upcomingEvents.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Upcoming Events")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    ForEach(marketContext.upcomingEvents.prefix(3)) { event in
-                        EventCard(event: event)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct WatchlistItemCard: View {
-    let item: WatchlistItem
-    let stock: Stock?
-    let sentiment: SentimentAnalysis?
-    let onSelect: (Stock) -> Void
-    let onRemove: () -> Void
-    let onToggleAlerts: () -> Void
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NotionCard {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.symbol)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text(item.companyName)
-                            .font(.body)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(2)
-                    }
-                    
-                    Spacer()
-                    
-                    if let stock = stock {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text(stock.formattedPrice)
-                                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            
-                            Text(stock.formattedChange)
-                                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                .foregroundColor(stock.isPositiveChange ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success) : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error))
-                        }
-                    }
-                }
-                
-                if let sentiment = sentiment {
-                    HStack {
-                        Image(systemName: sentiment.overallRating.icon)
-                            .foregroundColor(sentimentColor(sentiment))
-                            .font(.caption)
-                        
-                        Text(sentiment.overallRating.rawValue)
-                            .font(.caption)
-                            .foregroundColor(sentimentColor(sentiment))
-                        
-                        Spacer()
-                    }
-                }
-                
-                HStack {
-                    if let stock = stock {
-                        Button("View Details") {
-                            onSelect(stock)
-                        }
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    }
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 8) {
-                        Button(action: onToggleAlerts) {
-                            Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
-                                .foregroundColor(item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText))
-                        }
-                        
-                        Button(action: onRemove) {
-                            Image(systemName: "trash")
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private func sentimentColor(_ sentiment: SentimentAnalysis) -> Color {
-        switch sentiment.overallRating {
-        case .stronglyBullish, .bullish:
-            return themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success
-        case .cautiouslyOptimistic:
-            return themeManager.isDarkMode ? AppTheme.dark.colors.accent : AppTheme.light.colors.accent
-        case .neutral:
-            return themeManager.isDarkMode ? AppTheme.dark.colors.neutral : AppTheme.light.colors.neutral
-        case .bearishUndercurrents:
-            return themeManager.isDarkMode ? AppTheme.dark.colors.warning : AppTheme.light.colors.warning
-        case .bearish, .highlyNegative:
-            return themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error
-        }
-    }
-}
-
-// MARK: - Setting Row Components
-struct SettingToggleRow: View {
-    let title: String
-    let icon: String
-    @Binding var isOn: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                .frame(width: 24)
-            
-            Text(title)
-                .font(.body)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-        }
-    }
-}
-
-struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View where T.RawValue == String {
-    let title: String
-    let icon: String
-    @Binding var selection: T
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                .frame(width: 24)
-            
-            Text(title)
-                .font(.body)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            
-            Spacer()
-            
-            Picker("", selection: $selection) {
-                ForEach(Array(T.allCases), id: \.self) { option in
-                    Text(option.rawValue).tag(option)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
-        }
-    }
-}
-
-struct SettingActionRow: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-    let destructive: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    init(title: String, icon: String, action: @escaping () -> Void, destructive: Bool = false) {
-        self.title = title
-        self.icon = icon
-        self.action = action
-        self.destructive = destructive
-    }
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .foregroundColor(destructive ? (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                    .frame(width: 24)
-                
-                Text(title)
-                    .font(.body)
-                    .foregroundColor(destructive ? (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error) : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                
-                Spacer()
-            }
-        }
-    }
-}
-
-struct SettingNavigationRow: View {
-    let title: String
-    let icon: String
-    let destination: AnyView
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationLink(destination: destination) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    .frame(width: 24)
-                
-                Text(title)
-                    .font(.body)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Spacer()
-            }
-        }
-    }
-}
-
-// MARK: - Enhanced Sheet Views with Navigation
-struct AddStockSheet: View {
-    let onAddStock: (Stock) -> Void
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var searchViewModel = SearchViewModel()
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Custom Header
-                HStack {
-                    Button("Cancel") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                    
-                    Spacer()
-                    
-                    Text("Add Stock")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Spacer()
-                    
-                    // Invisible spacer for balance
-                    Text("Cancel")
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.clear)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                
-                Divider()
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-                
-                // Content
-                VStack(spacing: 16) {
-                    SearchBar(
-                        text: $searchViewModel.searchText,
-                        placeholder: "Search for stocks to add...",
-                        onCommit: { }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    
-                    if searchViewModel.isLoadingAllStocks {
-                        Spacer()
-                        ProgressView("Loading stocks...")
-                        Spacer()
-                    } else if !searchViewModel.searchResults.isEmpty {
-                        List(searchViewModel.searchResults, id: \.symbol) { stock in
-                            StockListRow(stock: stock)
-                                .onTapGesture {
-                                    onAddStock(stock)
-                                    presentationMode.wrappedValue.dismiss()
-                                }
-                        }
-                        .listStyle(PlainListStyle())
-                    } else {
-                        Spacer()
-                        VStack(spacing: 16) {
-                            Image(systemName: "list.bullet")
-                                .font(.system(size: 50))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                            
-                            Text("All Available Stocks")
-                                .font(.body)
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.horizontal, 32)
-                        Spacer()
-                    }
-                }
-            }
-            .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-            .navigationBarHidden(true)
-        }
-    }
-}
-
-// MARK: - Enhanced About Views with Navigation
-struct AboutView: View {
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Custom Header
-            HStack {
-                Button("Back") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                
-                Spacer()
-                
-                Text("About")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Spacer()
-                
-                // Invisible spacer for balance
-                Text("Back")
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.clear)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            
-            Divider()
-                .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-            
-            // Content
-            ScrollView {
-                VStack(spacing: 32) {
-                    // App Icon
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
-                                        themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 100, height: 100)
-                        
-                        if themeManager.isDarkMode {
-                            // For dark mode, use a styled version
-                            Image("AppIconImage")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary, lineWidth: 2)
-                                )
-                        } else {
-                            // For light mode, use the original icon
-                            Image("AppIconImage")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                    
-                    // App Info
-                    VStack(spacing: 16) {
-                        Text("ChartSense")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text("AI-Powered Stock Sentiment Analysis")
-                            .font(.body)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .multilineTextAlignment(.center)
-                        
-                        Text("Version 1.0.0 • Build 1")
-                            .font(.caption)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                    }
-                    
-                    // Features
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Features")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            FeatureRow(icon: "brain.head.profile", title: "AI-Powered Sentiment Analysis", description: "Advanced machine learning for market insights")
-                            FeatureRow(icon: "newspaper", title: "Real-time News Integration", description: "Latest financial news and market updates")
-                            FeatureRow(icon: "chart.line.uptrend.xyaxis", title: "Comprehensive Market Data", description: "Detailed stock information and analytics")
-                            FeatureRow(icon: "heart", title: "Personalized Watchlists", description: "Track your favorite stocks and ETFs")
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .padding(.vertical, 32)
-            }
-        }
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-        .navigationBarHidden(true)
-    }
-}
-
-struct FeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 16) {
+            // Animated Logo
             ZStack {
                 Circle()
-                    .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
-                    .frame(width: 32, height: 32)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
+                                themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                            ],
+                            startPoint: UnitPoint(x: animateGradient ? 0 : 1, y: 0),
+                            endPoint: UnitPoint(x: animateGradient ? 1 : 0, y: 1)
+                        )
+                    )
+                    .frame(width: 80, height: 80)
+                    .scaleEffect(animateGradient ? 1.1 : 1.0)
+                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateGradient)
                 
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(.white)
             }
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.body)
-                    .fontWeight(.medium)
+            VStack(spacing: 16) {
+                Text("ChartSense")
+                    .font(.system(size: 24, weight: .bold, design: .default))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 
-                Text(description)
-                    .font(.caption)
+                Text("Loading your market insights...")
+                    .font(.system(size: 16, weight: .medium, design: .default))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
             }
             
             Spacer()
         }
+        .onAppear {
+            animateGradient = true
+        }
     }
 }
 
-struct PrivacyView: View {
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var themeManager = ThemeManager.shared
+// MARK: - Preview
+#Preview {
+    HomeView()
+        .environmentObject(AppViewModel())
+} 
+
+// MARK: - Custom Data Models for Home View
+struct SentimentAlert {
+    let id = UUID()
+    let symbol: String
+    let message: String
+    let change: Double
+    let severity: String
+    let timeAgo: String
+}
+
+// MARK: - Enhanced Home View Model
+class EnhancedHomeViewModel: ObservableObject {
+    @Published var watchlistStocks: [Stock] = []
+    @Published var stockSentiments: [String: SentimentData] = [:]
+    @Published var sentimentAlerts: [SentimentAlert] = []
+    @Published var newsItems: [NewsItem] = []
+    @Published var marketSummary: String = ""
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    
+    func loadData() {
+        isLoading = true
+        errorMessage = nil
+        
+        // Simulate network delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.loadSampleData()
+            self.isLoading = false
+        }
+    }
+    
+    func refreshData() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        // Simulate network request
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        await MainActor.run {
+            loadSampleData()
+            isLoading = false
+        }
+    }
+    
+    private func loadSampleData() {
+        // Sample watchlist stocks
+        watchlistStocks = [
+            Stock(symbol: "AAPL", companyName: "Apple Inc.", currentPrice: 175.43, dailyChange: 4.12, dailyChangePercent: 2.34),
+            Stock(symbol: "TSLA", companyName: "Tesla Inc.", currentPrice: 248.50, dailyChange: -3.15, dailyChangePercent: -1.25),
+            Stock(symbol: "MSFT", companyName: "Microsoft Corporation", currentPrice: 338.11, dailyChange: 2.92, dailyChangePercent: 0.87)
+        ]
+        
+        // Sample sentiments using existing SentimentData structure
+        stockSentiments = [
+            "AAPL": SentimentData(overallScore: 0.75, confidence: 0.85, sources: []),
+            "TSLA": SentimentData(overallScore: -0.45, confidence: 0.72, sources: []),
+            "MSFT": SentimentData(overallScore: 0.12, confidence: 0.68, sources: [])
+        ]
+        
+        // Sample alerts
+        sentimentAlerts = [
+            SentimentAlert(symbol: "TSLA", message: "TSLA sentiment dropped 22% in 6h", change: -22, severity: "high", timeAgo: "2h ago"),
+            SentimentAlert(symbol: "AAPL", message: "AAPL sentiment improved 15% in 4h", change: 15, severity: "medium", timeAgo: "4h ago")
+        ]
+        
+        // Sample news using existing NewsItem structure
+        newsItems = [
+            NewsItem(headline: "Apple Reports Strong Q4 Earnings, Beats Expectations", summary: "Apple Inc. reported strong fourth-quarter earnings that exceeded analyst expectations.", source: "Reuters", publishedAt: Date().addingTimeInterval(-3600), url: "https://example.com", category: .earnings, sentiment: 0.8, relevanceScore: 0.9, imageURL: nil),
+            NewsItem(headline: "Tesla Faces Regulatory Scrutiny Over Safety Concerns", summary: "Tesla faces new regulatory scrutiny over safety concerns.", source: "Bloomberg", publishedAt: Date().addingTimeInterval(-10800), url: "https://example.com", category: .regulatory, sentiment: -0.6, relevanceScore: 0.8, imageURL: nil),
+            NewsItem(headline: "Microsoft Cloud Services See Record Growth", summary: "Microsoft's cloud services division reports record growth.", source: "CNBC", publishedAt: Date().addingTimeInterval(-18000), url: "https://example.com", category: .product, sentiment: 0.7, relevanceScore: 0.85, imageURL: nil)
+        ]
+        
+        // Sample market summary
+        marketSummary = "Markets are showing mixed signals today with tech stocks leading gains while energy sectors face pressure. Apple and Microsoft continue to benefit from strong earnings reports, while Tesla faces regulatory headwinds. Overall sentiment remains cautiously optimistic as investors await key economic data releases this week."
+    }
+} 
+
+// MARK: - Custom Sparkline View
+struct CustomSparklineView: View {
+    let data: [Double]
+    @State private var animatePath = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Custom Header
-            HStack {
-                Button("Back") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+        GeometryReader { geometry in
+            Path { path in
+                guard data.count > 1 else { return }
                 
-                Spacer()
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let stepX = width / CGFloat(data.count - 1)
                 
-                Text("Privacy Policy")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                let minValue = data.min() ?? 0
+                let maxValue = data.max() ?? 1
+                let range = maxValue - minValue
                 
-                Spacer()
-                
-                // Invisible spacer for balance
-                Text("Back")
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.clear)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            
-            Divider()
-                .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-            
-            // Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text("Your privacy is important to us. This policy describes how ChartSense collects, uses, and protects your information.")
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                for (index, value) in data.enumerated() {
+                    let x = CGFloat(index) * stepX
+                    let normalizedValue = range > 0 ? (value - minValue) / range : 0.5
+                    let y = height - (normalizedValue * height)
                     
-                    VStack(alignment: .leading, spacing: 16) {
-                        PolicySection(title: "Information We Collect", content: "We collect watchlist data, search history, and app preferences to provide personalized experiences.")
-                        PolicySection(title: "How We Use Information", content: "Your data helps us deliver relevant stock insights, news, and market analysis tailored to your interests.")
-                        PolicySection(title: "Data Protection", content: "We implement industry-standard security measures to protect your personal information.")
-                        PolicySection(title: "Third-Party Services", content: "We may use third-party services for data analysis and market information, all with appropriate privacy safeguards.")
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 32)
+            }
+            .trim(from: 0, to: animatePath ? 1.0 : 0.0)
+            .stroke(
+                LinearGradient(
+                    colors: [Color.blue, Color.purple],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+            )
+            .shadow(color: Color.blue.opacity(0.3), radius: 4, x: 0, y: 2)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.5)) {
+                animatePath = true
             }
         }
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-        .navigationBarHidden(true)
     }
 }
 
-struct PolicySection: View {
-    let title: String
-    let content: String
+// MARK: - Enhanced Sentiment Alerts Section
+struct EnhancedSentimentAlertsSection: View {
+    let alerts: [SentimentAlert]
     @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateAlerts = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            
-            Text(content)
-                .font(.body)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-        }
-    }
-}
-
-struct TermsView: View {
-    @Environment(\.presentationMode) var presentationMode
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Custom Header
+        VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Button("Back") {
-                    presentationMode.wrappedValue.dismiss()
-                }
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                Text("SENTIMENT ALERTS")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .tracking(1.5)
                 
                 Spacer()
                 
-                Text("Terms of Service")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                
-                Spacer()
-                
-                // Invisible spacer for balance
-                Text("Back")
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.clear)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            
-            Divider()
-                .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-            
-            // Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text("By using ChartSense, you agree to these terms of service. Please read them carefully.")
-                        .font(.body)
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    
-                    VStack(alignment: .leading, spacing: 16) {
-                        PolicySection(title: "Acceptance of Terms", content: "Using ChartSense constitutes acceptance of these terms and any future modifications.")
-                        PolicySection(title: "Use of Service", content: "ChartSense is for informational purposes only. We do not provide financial advice.")
-                        PolicySection(title: "Data Usage", content: "You grant us permission to use your data to provide and improve our services.")
-                        PolicySection(title: "Limitation of Liability", content: "ChartSense is not liable for any investment decisions made based on our data or analysis.")
+                // Custom indicator
+                HStack(spacing: 3) {
+                    ForEach(0..<min(alerts.count, 3)) { index in
+                        Rectangle()
+                            .fill(Color.orange)
+                            .frame(width: 3, height: 12)
+                            .cornerRadius(1.5)
+                            .scaleEffect(animateAlerts ? 1.0 : 0.8)
+                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateAlerts)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 32)
+            }
+            
+            LazyVStack(spacing: 12) {
+                ForEach(Array(alerts.prefix(3).enumerated()), id: \.element.id) { index, alert in
+                    EnhancedSentimentAlertCard(alert: alert)
+                        .offset(x: animateAlerts ? 0 : -20)
+                        .opacity(animateAlerts ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.5).delay(Double(index) * 0.1), value: animateAlerts)
+                }
             }
         }
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-        .navigationBarHidden(true)
+        .padding(.top, 20)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                animateAlerts = true
+            }
+        }
+    }
+}
+
+// MARK: - Enhanced Sentiment Alert Card
+struct EnhancedSentimentAlertCard: View {
+    let alert: SentimentAlert
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }) {
+            HStack(spacing: 16) {
+                // Custom icon with unique design
+                ZStack {
+                    Circle()
+                        .fill(alertColor.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: alertIcon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(alertColor)
+                        .rotationEffect(.degrees(isPressed ? 15 : 0))
+                        .animation(.easeInOut(duration: 0.2), value: isPressed)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(alert.message)
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        .lineLimit(2)
+                    
+                    Text("\(alert.timeAgo) • \(alert.severity)")
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+                
+                Spacer()
+                
+                // Custom change indicator
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(alert.change, specifier: "%.1f")%")
+                        .font(.system(size: 14, weight: .bold, design: .default))
+                        .foregroundColor(alertColor)
+                    
+                    Image(systemName: alert.change >= 0 ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(alertColor)
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(alertColor.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .shadow(
+                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                radius: 8,
+                x: 0,
+                y: 4
+            )
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            isPressed = pressing
+        }, perform: {})
+    }
+    
+    private var alertColor: Color {
+        switch alert.severity {
+        case "high":
+            return Color.red
+        case "medium":
+            return Color.orange
+        default:
+            return Color.yellow
+        }
+    }
+    
+    private var alertIcon: String {
+        switch alert.severity {
+        case "high":
+            return "exclamationmark.triangle.fill"
+        case "medium":
+            return "exclamationmark.circle.fill"
+        default:
+            return "info.circle.fill"
+        }
+    }
+}
+
+// MARK: - Premium News Feed Section
+struct PremiumNewsFeedSection: View {
+    let news: [NewsItem]
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateNews = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text("MARKET NEWS")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .tracking(1.5)
+                
+                Spacer()
+                
+                // Custom news indicator
+                HStack(spacing: 3) {
+                    ForEach(0..<min(news.count, 3)) { index in
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(width: 3, height: 8)
+                            .cornerRadius(1.5)
+                            .scaleEffect(animateNews ? 1.0 : 0.8)
+                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateNews)
+                    }
+                }
+            }
+            
+            LazyVStack(spacing: 12) {
+                ForEach(Array(news.prefix(3).enumerated()), id: \.element.id) { index, newsItem in
+                    PremiumNewsCard(newsItem: newsItem)
+                        .offset(x: animateNews ? 0 : 20)
+                        .opacity(animateNews ? 1.0 : 0.0)
+                        .animation(.easeInOut(duration: 0.5).delay(Double(index) * 0.1), value: animateNews)
+                }
+            }
+        }
+        .padding(.top, 20)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                animateNews = true
+            }
+        }
+    }
+}
+
+// MARK: - Premium News Card
+struct PremiumNewsCard: View {
+    let newsItem: NewsItem
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(newsItem.headline)
+                        .font(.system(size: 16, weight: .semibold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                    
+                    Spacer()
+                    
+                    // Custom sentiment indicator
+                    Circle()
+                        .fill(sentimentColor)
+                        .frame(width: 8, height: 8)
+                }
+                
+                HStack {
+                    Text(newsItem.source)
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    
+                    Text("•")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    
+                    Text(newsItem.timeAgo)
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .shadow(
+                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                radius: 8,
+                x: 0,
+                y: 4
+            )
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            isPressed = pressing
+        }, perform: {})
+    }
+    
+    private var sentimentColor: Color {
+        if newsItem.sentiment > 0.1 {
+            return Color.green
+        } else if newsItem.sentiment < -0.1 {
+            return Color.red
+        } else {
+            return Color.orange
+        }
+    }
+}
+
+// MARK: - Unique AI Summary Section
+struct UniqueAISummarySection: View {
+    let summary: String
+    let onAskAI: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var animateSummary = false
+    @State private var animateButton = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text("AI INSIGHTS")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .tracking(1.5)
+                
+                Spacer()
+                
+                // Custom AI indicator
+                HStack(spacing: 4) {
+                    ForEach(0..<3) { index in
+                        Circle()
+                            .fill(Color.purple)
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(animateSummary ? 1.0 : 0.8)
+                            .animation(.easeInOut(duration: 0.8).delay(Double(index) * 0.2), value: animateSummary)
+                    }
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 16) {
+                Text(summary.isEmpty ? "Market sentiment analysis shows mixed signals across major indices. Tech stocks continue to lead with strong momentum, while traditional sectors show cautious optimism." : summary)
+                    .font(.system(size: 16, weight: .medium, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    .lineLimit(4)
+                    .multilineTextAlignment(.leading)
+                
+                Button(action: {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                    impactFeedback.impactOccurred()
+                    onAskAI()
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Text("Ask AI Anything")
+                            .font(.system(size: 16, weight: .semibold, design: .default))
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.purple, Color.blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+                    .shadow(
+                        color: Color.purple.opacity(0.3),
+                        radius: animateButton ? 12 : 8,
+                        x: 0,
+                        y: animateButton ? 6 : 4
+                    )
+                    .scaleEffect(animateButton ? 1.02 : 1.0)
+                    .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: animateButton)
+                }
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.purple.opacity(0.3), Color.blue.opacity(0.3)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .shadow(
+                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+        }
+        .padding(.top, 20)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                animateSummary = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                animateButton = true
+            }
+        }
     }
 } 

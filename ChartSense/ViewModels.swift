@@ -969,4 +969,433 @@ extension Date {
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: self, relativeTo: Date())
     }
+}
+
+// MARK: - New Home View Data Models
+struct SentimentTile: Identifiable {
+    let id = UUID()
+    let ticker: String
+    let companyName: String
+    let sentimentScore: Double
+    let sentimentLabel: String
+    let currentPrice: Double
+    let priceChange: Double
+    let intradayData: [Double]
+    
+    init(ticker: String, companyName: String, sentimentScore: Double, currentPrice: Double, priceChange: Double) {
+        self.ticker = ticker
+        self.companyName = companyName
+        self.sentimentScore = sentimentScore
+        self.currentPrice = currentPrice
+        self.priceChange = priceChange
+        
+        // Generate sentiment label based on score
+        switch sentimentScore {
+        case 0.7...:
+            self.sentimentLabel = "Bullish"
+        case 0.5..<0.7:
+            self.sentimentLabel = "Neutral"
+        default:
+            self.sentimentLabel = "Bearish"
+        }
+        
+        // Generate mock intraday data
+        self.intradayData = (0..<20).map { _ in
+            Double.random(in: 0.8...1.2)
+        }
+    }
+}
+
+struct AINudgeCard: Identifiable {
+    let id = UUID()
+    let insight: String
+    let tag: String
+    
+    init(insight: String, tag: String) {
+        self.insight = insight
+        self.tag = tag
+    }
+}
+
+// MARK: - Sentiment Feed View Model
+class SentimentFeedViewModel: ObservableObject {
+    @Published var sentimentTiles: [SentimentTile] = []
+    @Published var isLoading = false
+    
+    init() {
+        loadMockData()
+    }
+    
+    func refreshData() {
+        isLoading = true
+        // Simulate network delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.loadMockData()
+            self.isLoading = false
+        }
+    }
+    
+    private func loadMockData() {
+        sentimentTiles = [
+            SentimentTile(
+                ticker: "TSLA",
+                companyName: "Tesla Inc",
+                sentimentScore: 0.85,
+                currentPrice: 245.67,
+                priceChange: 12.34
+            ),
+            SentimentTile(
+                ticker: "AAPL",
+                companyName: "Apple Inc",
+                sentimentScore: 0.72,
+                currentPrice: 178.45,
+                priceChange: -2.15
+            ),
+            SentimentTile(
+                ticker: "NVDA",
+                companyName: "NVIDIA Corp",
+                sentimentScore: 0.91,
+                currentPrice: 485.23,
+                priceChange: 23.67
+            ),
+            SentimentTile(
+                ticker: "MSFT",
+                companyName: "Microsoft Corp",
+                sentimentScore: 0.68,
+                currentPrice: 342.89,
+                priceChange: 8.92
+            ),
+            SentimentTile(
+                ticker: "GOOGL",
+                companyName: "Alphabet Inc",
+                sentimentScore: 0.55,
+                currentPrice: 156.78,
+                priceChange: -5.43
+            ),
+            SentimentTile(
+                ticker: "AMZN",
+                companyName: "Amazon.com Inc",
+                sentimentScore: 0.78,
+                currentPrice: 134.56,
+                priceChange: 15.23
+            ),
+            SentimentTile(
+                ticker: "META",
+                companyName: "Meta Platforms",
+                sentimentScore: 0.82,
+                currentPrice: 298.34,
+                priceChange: 18.76
+            ),
+            SentimentTile(
+                ticker: "NFLX",
+                companyName: "Netflix Inc",
+                sentimentScore: 0.63,
+                currentPrice: 445.12,
+                priceChange: -3.21
+            )
+        ]
+    }
+}
+
+// MARK: - AI Nudge Cards View Model
+class AINudgeCardsViewModel: ObservableObject {
+    @Published var aiCards: [AINudgeCard] = []
+    @Published var selectedCardIndex = 0
+    @Published var isLoading = false
+    
+    private var autoScrollTimer: Timer?
+    
+    init() {
+        loadMockData()
+        startAutoScroll()
+    }
+    
+    deinit {
+        autoScrollTimer?.invalidate()
+    }
+    
+    func refreshCards() {
+        isLoading = true
+        // Simulate network delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.loadMockData()
+            self.isLoading = false
+        }
+    }
+    
+    private func loadMockData() {
+        aiCards = [
+            AINudgeCard(
+                insight: "Tech stocks are showing strong momentum with AI and semiconductor sectors leading gains. Consider monitoring NVDA and AMD for continued strength.",
+                tag: "Trending"
+            ),
+            AINudgeCard(
+                insight: "Earnings season approaches with major banks reporting next week. Financial sector sentiment is cautiously optimistic ahead of results.",
+                tag: "Earnings Watch"
+            ),
+            AINudgeCard(
+                insight: "Market volatility has increased 15% this week. Consider defensive positions in consumer staples and utilities for portfolio stability.",
+                tag: "Volatility Spike"
+            ),
+            AINudgeCard(
+                insight: "Federal Reserve meeting minutes suggest potential rate cuts in Q2. Bond yields are declining, which could benefit growth stocks.",
+                tag: "Trending"
+            ),
+            AINudgeCard(
+                insight: "Oil prices are surging due to supply concerns. Energy sector stocks like XOM and CVX are showing strong technical momentum.",
+                tag: "Volatility Spike"
+            ),
+            AINudgeCard(
+                insight: "Retail sales data exceeded expectations, indicating strong consumer spending. Consumer discretionary stocks may benefit from this trend.",
+                tag: "Trending"
+            )
+        ]
+    }
+    
+    private func startAutoScroll() {
+        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                self.selectedCardIndex = (self.selectedCardIndex + 1) % self.aiCards.count
+            }
+        }
+    }
+}
+
+// MARK: - Market Status Enum
+enum MarketStatus: String, CaseIterable {
+    case open = "Market Open"
+    case closed = "Market Closed"
+    case preMarket = "Pre-Market"
+    case afterHours = "After Hours"
+}
+
+// MARK: - Market Pulse View Model
+class MarketPulseViewModel: ObservableObject {
+    @Published var marketStatus: MarketStatus = .open
+    @Published var bullishPercentage: Int = 68
+    @Published var bullishTrend: Double = 2.3
+    @Published var volatilityIndex: String = "VIX: 18.5"
+    @Published var volatilityTrend: Double = -1.2
+    @Published var aiConfidence: Int = 87
+    @Published var aiConfidenceTrend: Double = 3.1
+    @Published var newsSentiment: String = "Positive"
+    @Published var newsSentimentTrend: Double = 1.8
+    
+    init() {
+        startMarketStatusUpdates()
+    }
+    
+    private func startMarketStatusUpdates() {
+        // Simulate market status changes
+        Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            // Randomly change market status for demo
+            if Bool.random() {
+                self.marketStatus = MarketStatus.allCases.randomElement() ?? .open
+            }
+        }
+    }
+}
+
+// MARK: - AI Market Insight Data Models
+struct AIMarketInsight: Identifiable {
+    let id = UUID()
+    let category: String
+    let insight: String
+    let confidence: Int
+    let actionItems: [String]
+    
+    init(category: String, insight: String, confidence: Int, actionItems: [String] = []) {
+        self.category = category
+        self.insight = insight
+        self.confidence = confidence
+        self.actionItems = actionItems
+    }
+}
+
+// MARK: - AI Market Insights View Model
+class AIMarketInsightsViewModel: ObservableObject {
+    @Published var insights: [AIMarketInsight] = []
+    @Published var selectedInsightIndex = 0
+    @Published var isLoading = false
+    
+    private var autoScrollTimer: Timer?
+    
+    init() {
+        loadMockData()
+        startAutoScroll()
+    }
+    
+    deinit {
+        autoScrollTimer?.invalidate()
+    }
+    
+    func refreshInsights() {
+        isLoading = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.loadMockData()
+            self.isLoading = false
+        }
+    }
+    
+    private func loadMockData() {
+        insights = [
+            AIMarketInsight(
+                category: "Trend Analysis",
+                insight: "AI detects a 73% probability of continued tech sector momentum based on institutional flow patterns and earnings revisions.",
+                confidence: 87,
+                actionItems: ["Monitor NVDA, AMD, TSLA", "Consider tech ETF exposure", "Watch for earnings catalysts"]
+            ),
+            AIMarketInsight(
+                category: "Risk Alert",
+                insight: "Unusual options activity detected in financial sector. AI predicts 15% volatility increase in next 48 hours.",
+                confidence: 92,
+                actionItems: ["Review financial positions", "Consider hedging strategies", "Monitor JPM, BAC, WFC"]
+            ),
+            AIMarketInsight(
+                category: "Opportunity",
+                insight: "AI identifies undervalued healthcare stocks with strong fundamentals. 68% confidence in 12-month outperformance.",
+                confidence: 68,
+                actionItems: ["Research JNJ, PFE, UNH", "Consider healthcare ETFs", "Monitor FDA approvals"]
+            ),
+            AIMarketInsight(
+                category: "Market Shift",
+                insight: "Institutional money flow analysis shows rotation from growth to value. AI predicts 3-6 month trend change.",
+                confidence: 78,
+                actionItems: ["Review portfolio allocation", "Consider value ETFs", "Monitor sector rotation"]
+            ),
+            AIMarketInsight(
+                category: "Risk Alert",
+                insight: "AI detects potential market correction signals. Volatility expected to increase 25% in next 2 weeks.",
+                confidence: 85,
+                actionItems: ["Review risk exposure", "Consider defensive positions", "Monitor market breadth"]
+            )
+        ]
+    }
+    
+    private func startAutoScroll() {
+        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                self.selectedInsightIndex = (self.selectedInsightIndex + 1) % self.insights.count
+            }
+        }
+    }
+}
+
+// MARK: - Unusual Activity Alert Data Models
+enum UnusualActivityType {
+    case volumeSpike
+    case priceMovement
+    case newsImpact
+    case insiderActivity
+}
+
+struct UnusualActivityAlert: Identifiable {
+    let id = UUID()
+    let type: UnusualActivityType
+    let title: String
+    let description: String
+    let timeAgo: String
+    let icon: String
+    
+    init(type: UnusualActivityType, title: String, description: String, timeAgo: String, icon: String) {
+        self.type = type
+        self.title = title
+        self.description = description
+        self.timeAgo = timeAgo
+        self.icon = icon
+    }
+}
+
+// MARK: - Unusual Activity View Model
+class UnusualActivityViewModel: ObservableObject {
+    @Published var alerts: [UnusualActivityAlert] = []
+    
+    init() {
+        loadMockData()
+    }
+    
+    func dismissAll() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            alerts.removeAll()
+        }
+    }
+    
+    private func loadMockData() {
+        alerts = [
+            UnusualActivityAlert(
+                type: .volumeSpike,
+                title: "Unusual Volume Spike",
+                description: "TSLA volume 3x normal levels with 15% price movement",
+                timeAgo: "2 min ago",
+                icon: "chart.bar.fill"
+            ),
+            UnusualActivityAlert(
+                type: .priceMovement,
+                title: "Sharp Price Movement",
+                description: "NVDA up 8% in 15 minutes on heavy institutional buying",
+                timeAgo: "5 min ago",
+                icon: "arrow.up.right.circle.fill"
+            ),
+            UnusualActivityAlert(
+                type: .newsImpact,
+                title: "News Impact Detected",
+                description: "AAPL sentiment shifted negative on supply chain news",
+                timeAgo: "8 min ago",
+                icon: "newspaper.fill"
+            ),
+            UnusualActivityAlert(
+                type: .insiderActivity,
+                title: "Insider Trading Alert",
+                description: "Unusual options activity detected in META ahead of earnings",
+                timeAgo: "12 min ago",
+                icon: "person.2.fill"
+            )
+        ]
+    }
+}
+
+// MARK: - Market Sector Data Models
+struct MarketSector: Identifiable {
+    let id = UUID()
+    let name: String
+    let icon: String
+    let sentimentScore: Double
+    
+    init(name: String, icon: String, sentimentScore: Double) {
+        self.name = name
+        self.icon = icon
+        self.sentimentScore = sentimentScore
+    }
+}
+
+// MARK: - Market Sentiment Heatmap View Model
+class MarketSentimentHeatmapViewModel: ObservableObject {
+    @Published var sectors: [MarketSector] = []
+    @Published var isLoading = false
+    
+    init() {
+        loadMockData()
+    }
+    
+    func refreshData() {
+        isLoading = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.loadMockData()
+            self.isLoading = false
+        }
+    }
+    
+    private func loadMockData() {
+        sectors = [
+            MarketSector(name: "Technology", icon: "laptopcomputer", sentimentScore: 85),
+            MarketSector(name: "Healthcare", icon: "cross.case", sentimentScore: 72),
+            MarketSector(name: "Finance", icon: "building.2", sentimentScore: 45),
+            MarketSector(name: "Energy", icon: "bolt.fill", sentimentScore: 68),
+            MarketSector(name: "Consumer", icon: "cart.fill", sentimentScore: 58),
+            MarketSector(name: "Industrial", icon: "gearshape.fill", sentimentScore: 62),
+            MarketSector(name: "Materials", icon: "cube.fill", sentimentScore: 41),
+            MarketSector(name: "Real Estate", icon: "house.fill", sentimentScore: 35),
+            MarketSector(name: "Utilities", icon: "bolt.circle", sentimentScore: 78)
+        ]
+    }
 } 

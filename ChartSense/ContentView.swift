@@ -45,6 +45,7 @@ struct ContentView: View {
                             case 4:
                                 SettingsView()
                                     .environment(\.theme, themeManager.isDarkMode ? AppTheme.dark : AppTheme.light)
+                                    .environmentObject(appViewModel)
                             default:
                                 HomeView()
                                     .environmentObject(appViewModel)
@@ -66,6 +67,7 @@ struct ContentView: View {
             } else {
                 // Login Screen
                 AuthView()
+                    .environmentObject(appViewModel)
             }
         }
     }
@@ -79,7 +81,7 @@ struct CustomTabBar: View {
     private let tabs = [
         TabItem(icon: "house.fill", index: 0),
         TabItem(icon: "magnifyingglass", index: 1),
-        TabItem(icon: "brain.head.profile", index: 2),
+        TabItem(icon: "AppIconImage", index: 2, isChartSenseLogo: true),
         TabItem(icon: "heart.fill", index: 3),
         TabItem(icon: "gearshape.fill", index: 4)
     ]
@@ -106,8 +108,9 @@ struct CustomTabBar: View {
                 }
             }
             .padding(.horizontal, 2)
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+            .padding(.bottom, 0)
         }
     }
 }
@@ -115,6 +118,13 @@ struct CustomTabBar: View {
 struct TabItem {
     let icon: String
     let index: Int
+    let isChartSenseLogo: Bool
+    
+    init(icon: String, index: Int, isChartSenseLogo: Bool = false) {
+        self.icon = icon
+        self.index = index
+        self.isChartSenseLogo = isChartSenseLogo
+    }
 }
 
 struct CustomTabButton: View {
@@ -125,17 +135,47 @@ struct CustomTabButton: View {
     
     var body: some View {
         Button(action: action) {
-            // Icon only - no text, no VStack
-            Image(systemName: tab.icon)
-                .font(.system(size: isSelected ? 22 : 20, weight: isSelected ? .semibold : .medium))
-                .foregroundColor(
-                    isSelected 
-                        ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                        : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
+            if tab.isChartSenseLogo {
+                // ChartSense Logo - much larger and more prominent with blue border
+                Image(tab.icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: isSelected ? 44 : 40, height: isSelected ? 44 : 40)
+                    .foregroundColor(
+                        isSelected 
+                            ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                            : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    )
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(
+                                        isSelected 
+                                            ? Color.blue 
+                                            : Color.blue.opacity(0.3),
+                                        lineWidth: 2
+                                    )
+                            )
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            } else {
+                // Regular system icons
+                Image(systemName: tab.icon)
+                    .font(.system(size: isSelected ? 22 : 20, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(
+                        isSelected 
+                            ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                            : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+            }
         }
         .buttonStyle(PlainButtonStyle())
     }

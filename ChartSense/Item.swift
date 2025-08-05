@@ -21,8 +21,9 @@ final class Stock {
     var peRatio: Double?
     var lastUpdated: Date
     var isInWatchlist: Bool
+    var priceHistory: [Double] // Array of historical prices for sparkline
     
-    init(symbol: String, companyName: String, currentPrice: Double, dailyChange: Double, dailyChangePercent: Double, marketCap: Double? = nil, volume: Int64? = nil, peRatio: Double? = nil) {
+    init(symbol: String, companyName: String, currentPrice: Double, dailyChange: Double, dailyChangePercent: Double, marketCap: Double? = nil, volume: Int64? = nil, peRatio: Double? = nil, priceHistory: [Double] = []) {
         self.symbol = symbol.uppercased()
         self.companyName = companyName
         self.currentPrice = currentPrice
@@ -33,6 +34,7 @@ final class Stock {
         self.peRatio = peRatio
         self.lastUpdated = Date()
         self.isInWatchlist = false
+        self.priceHistory = priceHistory.isEmpty ? Stock.generateSamplePriceHistory(currentPrice: currentPrice, isPositive: dailyChangePercent >= 0) : priceHistory
     }
     
     var formattedPrice: String {
@@ -69,6 +71,11 @@ final class Stock {
         return dailyChange >= 0
     }
     
+    // Sparkline data for mini charts
+    var sparklineData: [Double] {
+        return priceHistory
+    }
+    
     // Real-time price support
     var realTimePrice: Double? {
         return WebSocketService.shared.getRealTimePrice(for: symbol)
@@ -97,6 +104,33 @@ final class Stock {
         } else {
             return String(format: "%.0f", number)
         }
+    }
+    
+    // Generate realistic sample price history for sparkline
+    private static func generateSamplePriceHistory(currentPrice: Double, isPositive: Bool) -> [Double] {
+        let count = 20
+        var prices: [Double] = []
+        
+        // Generate more realistic price movements
+        let basePrice = currentPrice
+        let volatility = basePrice * 0.02 // 2% volatility
+        
+        // Create a trend that matches the daily change direction
+        let trendDirection = isPositive ? 1.0 : -1.0
+        let trendStrength = basePrice * 0.015 // 1.5% trend strength
+        
+        for i in 0..<count {
+            let progress = Double(i) / Double(count - 1)
+            
+            // Create a trend that matches the daily change
+            let trend = progress * trendDirection * trendStrength
+            let randomWalk = Double.random(in: -volatility...volatility)
+            let price = basePrice + trend + randomWalk
+            
+            prices.append(max(price, basePrice * 0.9)) // Ensure price doesn't go too low
+        }
+        
+        return prices
     }
 }
 
