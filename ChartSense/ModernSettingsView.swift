@@ -1,6 +1,66 @@
 import SwiftUI
 import Combine
 
+// MARK: - Adaptive Email Display Component
+struct AdaptiveEmailDisplay: View {
+    let email: String
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var textSize: CGFloat = 16
+    
+    private var fontWeight: Font.Weight {
+        let emailLength = email.count
+        switch emailLength {
+        case 0...25: return .medium
+        case 26...40: return .regular
+        default: return .light
+        }
+    }
+    
+    var body: some View {
+        Text(email)
+            .font(.system(size: textSize, weight: fontWeight))
+            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            // Calculate optimal font size based on email length
+                            let emailLength = email.count
+                            var optimalSize: CGFloat = 16
+                            
+                            // Progressive size reduction for longer emails
+                            if emailLength > 25 {
+                                optimalSize = 15
+                            }
+                            if emailLength > 35 {
+                                optimalSize = 14
+                            }
+                            if emailLength > 45 {
+                                optimalSize = 13
+                            }
+                            if emailLength > 55 {
+                                optimalSize = 12
+                            }
+                            if emailLength > 65 {
+                                optimalSize = 11
+                            }
+                            if emailLength > 75 {
+                                optimalSize = 10
+                            }
+                            
+                            // Ensure minimum size
+                            textSize = max(optimalSize, 10)
+                        }
+                }
+            )
+            .animation(.easeInOut(duration: 0.2), value: email)
+    }
+}
+
 // MARK: - Modern Settings View
 struct ModernSettingsView: View {
     @StateObject private var viewModel = ModernSettingsViewModel()
@@ -89,12 +149,7 @@ struct ModernSettingsHeader: View {
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     
-                    Text(authViewModel.currentUser?.email ?? "Not signed in")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                    AdaptiveEmailDisplay(email: authViewModel.currentUser?.email ?? "Not signed in")
                     
                     HStack(spacing: 8) {
                         Circle()
@@ -107,13 +162,6 @@ struct ModernSettingsHeader: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                
-                Spacer()
-                
-                // Settings Icon
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
             }
             .padding(24)
             .background(
