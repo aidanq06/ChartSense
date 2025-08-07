@@ -1575,21 +1575,26 @@ struct SentimentFocusedStockCard: View {
             ZStack {
                 // Clean background with subtle design
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color.white)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.blue.opacity(isHovered ? 0.3 : 0.1),
-                                        Color.purple.opacity(isHovered ? 0.3 : 0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: isHovered ? 2 : 1
-                            )
+                        Group {
+                            if !themeManager.isDarkMode {
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.blue.opacity(isHovered ? 0.3 : 0.1),
+                                                Color.purple.opacity(isHovered ? 0.3 : 0.1)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: isHovered ? 2 : 1
+                                    )
+                            }
+                        }
                     )
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
                     .shadow(
                         color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.05),
                         radius: isHovered ? 15 : 8,
@@ -1614,7 +1619,7 @@ struct SentimentFocusedStockCard: View {
                             )
                         )
                         .offset(x: shimmerOffset)
-                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
                 }
                 
                 VStack(spacing: 0) {
@@ -1785,6 +1790,7 @@ struct SentimentFocusedStockCard: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 20))
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -1903,7 +1909,7 @@ struct SentimentBreakdownItem: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            Rectangle()
                 .fill(color.opacity(0.1))
         )
     }
