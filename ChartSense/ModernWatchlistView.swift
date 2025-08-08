@@ -304,7 +304,7 @@ struct ModernWatchlistContent: View {
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 32) {
                 ForEach(items, id: \.id) { itemWithStock in
                     ModernWatchlistCard(
                         item: itemWithStock.watchlistItem,
@@ -337,215 +337,156 @@ struct ModernWatchlistCard: View {
     
     var body: some View {
         Button(action: {
-            if let stock = stock {
-                onSelect(stock)
-            }
+            if let stock = stock { onSelect(stock) }
         }) {
             VStack(spacing: 0) {
-                // Enhanced Main Content
-                HStack(spacing: 20) {
-                    // Enhanced Stock Info with Visual Accent
+                // Top row
+                HStack(spacing: 22) {
+                    // Left: Symbol/Name
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
-                            // Stock symbol with accent
                             Text(item.symbol)
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .font(.system(size: 24, weight: .bold))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            
-                            // Sentiment indicator badge
                             if let sentiment = sentiment {
-                                ZStack {
-                                    Circle()
-                                        .fill(sentimentColor(sentiment).opacity(0.15))
-                                        .frame(width: 24, height: 24)
-                                    
-                                    Image(systemName: sentiment.overallRating.icon)
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(sentimentColor(sentiment))
-                                }
+                                Circle()
+                                    .fill(sentimentColor(sentiment).opacity(0.15))
+                                    .frame(width: 22, height: 22)
+                                    .overlay(
+                                        Image(systemName: sentiment.overallRating.icon)
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(sentimentColor(sentiment))
+                                    )
                             }
                         }
-                        
                         Text(item.companyName)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(1)
                     }
-                    
-                    Spacer()
-                    
-                    // Enhanced Price Info with Visual Impact
-                    if let stock = stock {
-                        VStack(alignment: .trailing, spacing: 8) {
+                    Spacer(minLength: 8)
+                    // Right: Price/Change and alert toggle inline
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let stock = stock {
                             Text(stock.formattedPrice)
                                 .font(.system(size: 22, weight: .bold, design: .monospaced))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            
                             HStack(spacing: 6) {
-                                // Enhanced change indicator
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(stock.isPositiveChange ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
-                                        .frame(width: 60, height: 24)
-                                    
-                                    HStack(spacing: 4) {
-                                        Image(systemName: stock.isPositiveChange ? "arrow.up.right" : "arrow.down.right")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(stock.isPositiveChange ? Color.green : Color.red)
-                                        
-                                        Text(stock.formattedChangePercent)
-                                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                            .foregroundColor(stock.isPositiveChange ? Color.green : Color.red)
-                                    }
-                                }
+                                Text(stock.isPositiveChange ? "↗" : "↘")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(stock.isPositiveChange ? .green : .red)
+                                Text(stock.formattedChangePercent)
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(stock.isPositiveChange ? .green : .red)
                             }
-                        }
-                    } else {
-                        VStack(alignment: .trailing, spacing: 8) {
+                        } else {
                             Text("--")
-                                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                                .font(.system(size: 20, weight: .bold, design: .monospaced))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                            
-                            Text("Loading...")
+                            Text("Loading…")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                         }
                     }
-                    
-                    // Enhanced Action Buttons
-                    VStack(spacing: 8) {
-                        // Enhanced Alert Toggle Button
-                        Button(action: {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            onToggleAlerts()
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(item.alertsEnabled ? 
-                                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.2) :
-                                        (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground))
-                                    .frame(width: 36, height: 36)
-                                
-                                Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(item.alertsEnabled ? 
-                                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) :
-                                        (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
-                            }
-                            .scaleEffect(item.alertsEnabled ? 1.1 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: item.alertsEnabled)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        // Enhanced Options Button
-                        Button(action: { showingOptions = true }) {
-                            ZStack {
-                                Circle()
-                                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                                    .frame(width: 36, height: 36)
-                                
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            }
-                        }
-                        .actionSheet(isPresented: $showingOptions) {
-                            ActionSheet(
-                                title: Text(item.symbol),
-                                message: Text(item.companyName),
-                                buttons: [
-                                    .destructive(Text("Remove from Watchlist")) {
-                                        onRemove()
-                                    },
-                                    .cancel()
-                                ]
+                    Button(action: {
+                        let generator = UIImpactFeedbackGenerator(style: .light)
+                        generator.impactOccurred()
+                        onToggleAlerts()
+                    }) {
+                        Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle().fill(
+                                    item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15) : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                                )
                             )
-                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(20)
+                .padding(.horizontal, 26)
+                .padding(.top, 24)
+                .padding(.bottom, 18)
                 
-                // Enhanced Sentiment Section
-                if let sentiment = sentiment {
-                    VStack(spacing: 12) {
-                        Divider()
-                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-                        
-                        HStack(spacing: 16) {
-                            // Sentiment overview
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("SENTIMENT")
-                                    .font(.system(size: 10, weight: .bold, design: .default))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                    .tracking(1.0)
-                                
-                                HStack(spacing: 8) {
-                                    Image(systemName: sentiment.overallRating.icon)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(sentimentColor(sentiment))
-                                    
-                                    Text(sentiment.overallRating.rawValue)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(sentimentColor(sentiment))
+                // Timeframe row + Sparkline
+                if let stock = stock {
+                    ZStack {
+                        SparklineGrid()
+                            .padding(.horizontal, 16)
+                        SparklineView(dataPoints: stock.sparklineData, isPositive: stock.isPositiveChange)
+                            .padding(.horizontal, 16)
+                            .frame(height: 72)
+                        // Market open dotted line overlay
+                        GeometryReader { geo in
+                            let points = stock.sparklineData
+                            if let minVal = points.min(), let maxVal = points.max(),
+                               let open = points.first, maxVal - minVal != 0 {
+                                let ratio = (open - minVal) / (maxVal - minVal)
+                                let y = geo.size.height - CGFloat(ratio) * geo.size.height
+                                Path { p in
+                                    p.move(to: CGPoint(x: 0, y: y))
+                                    p.addLine(to: CGPoint(x: geo.size.width, y: y))
                                 }
-                            }
-                            
-                            Spacer()
-                            
-                            // Price target if available
-                            if let stock = stock, let target = item.priceTarget {
-                                VStack(alignment: .trailing, spacing: 6) {
-                                    Text("TARGET")
-                                        .font(.system(size: 10, weight: .bold, design: .default))
-                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                        .tracking(1.0)
-                                    
-                                    Text(String(format: "$%.2f", target))
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                }
+                                .stroke(Color.white.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [6,4]))
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, 16)
                     }
+                    .padding(.bottom, 18)
+                }
+                
+                // Meta row
+                if let sentiment = sentiment {
+                    Divider().background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                    HStack(spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: sentiment.overallRating.icon)
+                            Text(sentiment.overallRating.rawValue)
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(sentimentColor(sentiment))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(sentimentColor(sentiment).opacity(0.12))
+                        .clipShape(Capsule())
+                        Spacer()
+                        if let target = item.priceTarget {
+                            HStack(spacing: 6) {
+                                Image(systemName: "target")
+                                Text(String(format: "$%.2f", target))
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                            .clipShape(Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 24)
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(themeManager.isDarkMode ? 
-                        Color(hex: "1A1A1A") : 
-                        Color.white)
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(LinearGradient(colors: [Color.blue.opacity(0.08), Color.purple.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
                     )
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill((stock?.isPositiveChange ?? false) ? LinearGradient(colors: [.blue.opacity(0.9), .blue.opacity(0.4)], startPoint: .top, endPoint: .bottom) : LinearGradient(colors: [.red.opacity(0.9), .red.opacity(0.4)], startPoint: .top, endPoint: .bottom))
+                            .frame(width: 3)
+                            .padding(.vertical, 18)
+                    }
             )
-            .shadow(
-                color: themeManager.isDarkMode ? 
-                    Color.black.opacity(0.2) : 
-                    Color.black.opacity(0.05),
-                radius: isPressed ? 12 : 8,
-                x: 0,
-                y: isPressed ? 6 : 4
-            )
+            .shadow(color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.07), radius: 18, x: 0, y: 14)
             .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
+            .animation(.easeInOut(duration: 0.12), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.6).delay(0.1)) {
-                animateCard = true
-            }
-        }
     }
     
     private func sentimentColor(_ sentiment: SentimentAnalysis) -> Color {
@@ -564,6 +505,57 @@ struct ModernWatchlistCard: View {
     }
 }
 
+// MARK: - Sparkline Views (inline to fix missing scope)
+fileprivate struct SparklineView: View {
+    let dataPoints: [Double]
+    let isPositive: Bool
+    
+    private func normalized(in size: CGSize) -> [CGPoint] {
+        guard let minVal = dataPoints.min(), let maxVal = dataPoints.max(), maxVal - minVal != 0 else { return [] }
+        let stepX = size.width / CGFloat(Swift.max(1, dataPoints.count - 1))
+        return dataPoints.enumerated().map { idx, val in
+            let x = CGFloat(idx) * stepX
+            let ratio = (val - minVal) / (maxVal - minVal)
+            let y = size.height - CGFloat(ratio) * size.height
+            return CGPoint(x: x, y: y)
+        }
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            let pts = normalized(in: geo.size)
+            let color = isPositive ? Color.blue : Color.red
+            ZStack {
+                if pts.count > 1 {
+                    Path { p in
+                        p.move(to: CGPoint(x: pts.first!.x, y: geo.size.height))
+                        for pt in pts { p.addLine(to: pt) }
+                        p.addLine(to: CGPoint(x: pts.last!.x, y: geo.size.height))
+                        p.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [color.opacity(0.22), color.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom))
+                    Path { p in p.addLines(pts) }
+                        .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                }
+            }
+        }
+    }
+}
+
+fileprivate struct SparklineGrid: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        GeometryReader { geo in
+            let line = (themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: w, y: 0)) }.stroke(line.opacity(0.35), lineWidth: 0.5)
+                Path { p in p.move(to: CGPoint(x: 0, y: h/2)); p.addLine(to: CGPoint(x: w, y: h/2)) }.stroke(line.opacity(0.55), style: StrokeStyle(lineWidth: 0.5, dash: [4,3]))
+                Path { p in p.move(to: CGPoint(x: 0, y: h)); p.addLine(to: CGPoint(x: w, y: h)) }.stroke(line.opacity(0.35), lineWidth: 0.5)
+            }
+        }
+    }
+}
 // MARK: - Modern Add Stock Sheet
 struct ModernAddStockSheet: View {
     let onAdd: (Stock) -> Void

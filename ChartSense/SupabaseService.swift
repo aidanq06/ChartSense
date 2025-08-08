@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Security
 
 // MARK: - Supabase Service
 enum SupabaseError: Error, LocalizedError {
@@ -38,6 +39,8 @@ class SupabaseService: ObservableObject {
     private var supabaseURL: String?
     private var supabaseAnonKey: String?
     private var accessToken: String?
+    private var refreshToken: String?
+    private var accessTokenExpiry: Date?
     @Published var currentUser: User?
     @Published var isAuthenticated = false
     @Published var isLoading = false
@@ -57,6 +60,7 @@ class SupabaseService: ObservableObject {
         }
         
         print("✅ Supabase service initialized")
+        Task { await restoreSession() }
     }
     
     // MARK: - Authentication
@@ -157,7 +161,11 @@ class SupabaseService: ObservableObject {
                     let userName = userData["user_metadata"] as? [String: Any]
                     let name = userName?["name"] as? String ?? "User"
                     
+                    let refresh = json["refresh_token"] as? String
                     self.accessToken = accessToken
+                    self.refreshToken = refresh
+                    self.accessTokenExpiry = decodeJWTExpiry(accessToken)
+                    saveSession(accessToken: accessToken, refreshToken: refresh, userId: userId, email: email, name: name)
                     currentUser = User(
                         id: userId,
                         email: email,
@@ -187,12 +195,13 @@ class SupabaseService: ObservableObject {
         currentUser = nil
         isAuthenticated = false
         accessToken = nil
+        refreshToken = nil
+        accessTokenExpiry = nil
+        clearSession()
         print("✅ User signed out successfully")
     }
     
-    func checkAuthenticationStatus() async {
-        print("ℹ️ Checking authentication status (simplified)")
-    }
+    func checkAuthenticationStatus() async { await restoreSession() }
     
     func signInWithApple() async throws {
         // Apple Sign In implementation would go here
@@ -1183,3 +1192,124 @@ class SupabaseService: ObservableObject {
         print("   Is Authenticated: \(isAuthenticated)")
     }
 } 
+
+// MARK: - Session persistence helpers
+extension SupabaseService {
+    private var kAccessTokenKey: String { "SupabaseAccessToken" }
+    private var kRefreshTokenKey: String { "SupabaseRefreshToken" }
+    private var kUserIdKey: String { "SupabaseUserId" }
+    private var kUserEmailKey: String { "SupabaseUserEmail" }
+    private var kUserNameKey: String { "SupabaseUserName" }
+
+    private func saveSession(accessToken: String?, refreshToken: String?, userId: String?, email: String?, name: String?) {
+        if let accessToken = accessToken { KeychainHelper.save(accessToken, for: kAccessTokenKey) }
+        if let refreshToken = refreshToken { KeychainHelper.save(refreshToken, for: kRefreshTokenKey) }
+        if let userId = userId { KeychainHelper.save(userId, for: kUserIdKey) }
+        if let email = email { KeychainHelper.save(email, for: kUserEmailKey) }
+        if let name = name { KeychainHelper.save(name, for: kUserNameKey) }
+    }
+
+    private func clearSession() {
+        KeychainHelper.delete(kAccessTokenKey)
+        KeychainHelper.delete(kRefreshTokenKey)
+        KeychainHelper.delete(kUserIdKey)
+        KeychainHelper.delete(kUserEmailKey)
+        KeychainHelper.delete(kUserNameKey)
+    }
+
+    @MainActor
+    private func restoreSession() async {
+        if let storedAccess = KeychainHelper.read(kAccessTokenKey) {
+            self.accessToken = storedAccess
+            self.accessTokenExpiry = decodeJWTExpiry(storedAccess)
+        }
+        if let storedRefresh = KeychainHelper.read(kRefreshTokenKey) { self.refreshToken = storedRefresh }
+        if let uid = KeychainHelper.read(kUserIdKey), let email = KeychainHelper.read(kUserEmailKey) {
+            let name = KeychainHelper.read(kUserNameKey) ?? "User"
+            self.currentUser = User(id: uid, email: email, name: name, authProvider: .email, createdAt: Date())
+        }
+        do {
+            try await refreshAccessTokenIfNeeded()
+            self.isAuthenticated = (self.accessToken != nil && self.currentUser != nil)
+        } catch {
+            print("❌ Failed to restore session: \(error)")
+            clearSession()
+            self.isAuthenticated = false
+            self.currentUser = nil
+        }
+    }
+
+    private func decodeJWTExpiry(_ token: String?) -> Date? {
+        guard let token = token else { return nil }
+        let parts = token.split(separator: ".")
+        guard parts.count > 1 else { return nil }
+        var base64 = String(parts[1])
+        let rem = base64.count % 4
+        if rem > 0 { base64.append(String(repeating: "=", count: 4 - rem)) }
+        let fixed = base64.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        guard let data = Data(base64Encoded: fixed),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = json["exp"] as? Double else { return nil }
+        return Date(timeIntervalSince1970: exp)
+    }
+
+    @discardableResult
+    private func refreshAccessTokenIfNeeded() async throws -> String? {
+        guard let supabaseURL = supabaseURL, let anon = supabaseAnonKey else { return nil }
+        let now = Date()
+        let needsRefresh = accessToken == nil || (accessTokenExpiry ?? now).addingTimeInterval(-60) <= now
+        guard needsRefresh, let refresh = refreshToken else { return accessToken }
+        var req = URLRequest(url: URL(string: "\(supabaseURL)/auth/v1/token?grant_type=refresh_token")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(anon)", forHTTPHeaderField: "Authorization")
+        req.setValue(anon, forHTTPHeaderField: "apikey")
+        let body = ["refresh_token": refresh]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw SupabaseError.notAuthenticated }
+        let newAccess = json["access_token"] as? String
+        let newRefresh = json["refresh_token"] as? String ?? refresh
+        self.accessToken = newAccess
+        self.refreshToken = newRefresh
+        self.accessTokenExpiry = decodeJWTExpiry(newAccess)
+        saveSession(accessToken: newAccess, refreshToken: newRefresh, userId: KeychainHelper.read(kUserIdKey), email: KeychainHelper.read(kUserEmailKey), name: KeychainHelper.read(kUserNameKey))
+        return newAccess
+    }
+}
+
+fileprivate struct KeychainHelper {
+    static func save(_ value: String, for key: String) {
+        let data = Data(value.utf8)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func read(_ key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(_ key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
