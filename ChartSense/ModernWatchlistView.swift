@@ -79,6 +79,79 @@ struct ModernWatchlistView: View {
     }
 }
 
+// MARK: - Premium Upsell Banner
+struct PremiumUpsellBanner: View {
+    @StateObject private var themeManager = ThemeManager.shared
+    let onUpgrade: () -> Void
+    
+    var body: some View {
+        ZStack {
+            // Background glass card
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            (themeManager.isDarkMode ? Color.white.opacity(0.06) : Color.white.opacity(0.9)),
+                            (themeManager.isDarkMode ? Color.white.opacity(0.03) : Color.white.opacity(0.8))
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.6)
+                )
+                .shadow(color: .black.opacity(themeManager.isDarkMode ? 0.35 : 0.08), radius: 14, x: 0, y: 10)
+            
+            HStack(alignment: .center, spacing: 14) {
+                // Icon badge
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 28, height: 28)
+                        .shadow(color: .blue.opacity(0.2), radius: 6, x: 0, y: 3)
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                
+                // Text stack
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Premium")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    Text("Upgrade to Premium to add unlimited stocks to your watchlist.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.95)
+                }
+                
+                Spacer()
+                
+                // CTA button
+                Button(action: onUpgrade) {
+                    Text("Upgrade")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule()
+                                .fill(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+                        )
+                        .shadow(color: .blue.opacity(0.18), radius: 6, x: 0, y: 3)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .frame(height: 72)
+    }
+}
+
 // MARK: - Modern Watchlist Header
 struct ModernWatchlistHeader: View {
     @Binding var searchText: String
@@ -540,27 +613,13 @@ struct ModernAddStockSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 
-                // Watchlist Limit Indicator
+                // Watchlist Limit Indicator (Premium Upsell)
                 if !premiumManager.isPremium {
-                    HStack {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        
-                        Text("Free users can track 1 stock. Upgrade to Premium for unlimited watchlist!")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        
-                        Spacer()
-                        
-                        Button("Upgrade") {
-                            premiumManager.showingPremiumUpgrade = true
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                    PremiumUpsellBanner {
+                        premiumManager.showingPremiumUpgrade = true
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.top, 10)
                 }
                 
                 // Results

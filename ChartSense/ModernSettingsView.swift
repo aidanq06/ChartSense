@@ -246,6 +246,13 @@ struct EssentialSettingsSection: View {
                         icon: "moon.fill",
                         isOn: $viewModel.isDarkMode
                     )
+                    
+                    ModernToggleCard(
+                        title: "Compact Layout",
+                        subtitle: "Use condensed view for more data",
+                        icon: "rectangle.compress.vertical",
+                        isOn: $viewModel.compactLayout
+                    )
                 }
             }
             
@@ -273,7 +280,59 @@ struct EssentialSettingsSection: View {
                             icon: "clock.fill",
                             isOn: $viewModel.marketOpenAlerts
                         )
+                        
+                        ModernToggleCard(
+                            title: "News Alerts",
+                            subtitle: "Breaking news and market updates",
+                            icon: "newspaper.fill",
+                            isOn: $viewModel.newsAlertsEnabled
+                        )
                     }
+                }
+            }
+            
+            // Trading Section
+            ModernSettingsSection(title: "Trading", icon: "chart.line.uptrend.xyaxis") {
+                VStack(spacing: 12) {
+                    ModernToggleCard(
+                        title: "Real-time Data",
+                        subtitle: "Enable live market data streaming",
+                        icon: "antenna.radiowaves.left.and.right",
+                        isOn: $viewModel.realTimeData
+                    )
+                    
+                    ModernToggleCard(
+                        title: "Extended Hours",
+                        subtitle: "Show pre/post market data",
+                        icon: "clock.arrow.circlepath",
+                        isOn: $viewModel.extendedHours
+                    )
+                    
+                    ModernToggleCard(
+                        title: "Auto-refresh",
+                        subtitle: "Automatically update data every 30 seconds",
+                        icon: "arrow.clockwise",
+                        isOn: $viewModel.autoRefresh
+                    )
+                }
+            }
+            
+            // Privacy Section
+            ModernSettingsSection(title: "Privacy", icon: "lock.shield") {
+                VStack(spacing: 12) {
+                    ModernToggleCard(
+                        title: "Analytics",
+                        subtitle: "Help improve the app with usage data",
+                        icon: "chart.bar.fill",
+                        isOn: $viewModel.analyticsEnabled
+                    )
+                    
+                    ModernToggleCard(
+                        title: "Crash Reports",
+                        subtitle: "Send crash reports to help fix issues",
+                        icon: "exclamationmark.triangle.fill",
+                        isOn: $viewModel.crashReports
+                    )
                 }
             }
         }
@@ -439,6 +498,56 @@ struct AccountSupportSection: View {
                         subtitle: "Share your feedback",
                         icon: "star.fill",
                         color: .yellow
+                    ) {
+                        // Action
+                    }
+                    
+                    ModernActionCard(
+                        title: "Terms of Service",
+                        subtitle: "Read our terms and conditions",
+                        icon: "doc.text.fill",
+                        color: .gray
+                    ) {
+                        // Action
+                    }
+                    
+                    ModernActionCard(
+                        title: "Privacy Policy",
+                        subtitle: "Learn about data protection",
+                        icon: "hand.raised.fill",
+                        color: .blue
+                    ) {
+                        // Action
+                    }
+                }
+            }
+            
+            // About Section
+            ModernSettingsSection(title: "About", icon: "info.circle.fill") {
+                VStack(spacing: 12) {
+                    ModernActionCard(
+                        title: "App Version",
+                        subtitle: "Version 1.0.0 (Build 1)",
+                        icon: "app.badge.fill",
+                        color: .green
+                    ) {
+                        // Action
+                    }
+                    
+                    ModernActionCard(
+                        title: "What's New",
+                        subtitle: "See recent updates and features",
+                        icon: "sparkles",
+                        color: .purple
+                    ) {
+                        // Action
+                    }
+                    
+                    ModernActionCard(
+                        title: "Open Source",
+                        subtitle: "View third-party licenses",
+                        icon: "doc.on.doc.fill",
+                        color: .orange
                     ) {
                         // Action
                     }

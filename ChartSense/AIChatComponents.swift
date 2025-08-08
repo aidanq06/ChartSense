@@ -444,7 +444,7 @@ struct AIChatHeader: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // AI Avatar
+            // AI Avatar (minimal orb)
             AIChatAvatar()
             
             VStack(alignment: .leading, spacing: 2) {
@@ -465,33 +465,15 @@ struct AIChatHeader: View {
             
             Spacer()
             
-            // Premium indicator (for free users)
+            // Minimal free counter (compact)
             if !premiumManager.isPremium {
-                HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "message.circle")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    
-                        Text("\(premiumManager.aiMessagesRemaining)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera.viewfinder")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        
-                        Text("\(premiumManager.imageAnalysisRemaining)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                .cornerRadius(8)
+                Text("Free: \(premiumManager.aiMessagesRemaining) msgs · \(premiumManager.imageAnalysisRemaining) imgs")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .cornerRadius(8)
             }
             
             // Connection status
@@ -566,63 +548,50 @@ struct WelcomeMessage: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Welcome card
+        VStack(spacing: 14) {
+            // Welcome card (short and visual)
             NotionCard {
-                VStack(spacing: 12) {
-                    HStack {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.blue)
-                        
-                        Text("Welcome to ChartSense AI")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    }
+                HStack(alignment: .center, spacing: 12) {
+                    // Custom orb instead of stock icon
+                    Circle()
+                        .fill(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 18, height: 18)
+                        .shadow(color: .blue.opacity(0.25), radius: 8, x: 0, y: 4)
                     
-                    Text("I'm your AI financial assistant. I can help you analyze stocks, explain charts, and provide investment insights. What would you like to know?")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        .multilineTextAlignment(.leading)
-                }
-            }
-            
-            // Image analysis feature card
-            NotionCard {
-                VStack(spacing: 12) {
-                    HStack {
-                        Image(systemName: "camera.viewfinder")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.purple)
-                        
-                        Text("Chart Analysis")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Ask anything about a stock")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        Text("Short, precise answers. Clean visuals.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                     }
-                    
-                    Text("Upload a screenshot of any chart and I'll provide detailed technical analysis, pattern recognition, and trading recommendations.")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        .multilineTextAlignment(.leading)
                 }
             }
-            
-            // Quick suggestions
-            VStack(spacing: 8) {
-                Text("Try asking:")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                
-                HStack(spacing: 8) {
-                    SuggestionChip(title: "Analyze AAPL", icon: "chart.line.uptrend.xyaxis")
-                    SuggestionChip(title: "Market trends", icon: "chart.bar.fill")
-                }
-                
-                HStack(spacing: 8) {
-                    SuggestionChip(title: "Upload chart", icon: "camera.viewfinder") {
-                        // This will be handled by the parent view
+
+            // Image analysis teaser (concise)
+            NotionCard {
+                HStack(alignment: .center, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 18, height: 18)
+                        .shadow(color: .purple.opacity(0.25), radius: 8, x: 0, y: 4)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Upload a chart for instant analysis")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        Text("Patterns, levels, and a simple plan.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                     }
                 }
+            }
+
+            // Quick suggestions (very compact)
+            HStack(spacing: 8) {
+                SuggestionChip(title: "Analyze AAPL", icon: "sparkles")
+                SuggestionChip(title: "Market trends", icon: "sparkles")
+                SuggestionChip(title: "Upload chart", icon: "sparkles")
             }
         }
     }
@@ -767,20 +736,16 @@ struct ModernChatInput: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Suggestions
+            // Suggestions (only when empty; ultra-compact)
             if !suggestions.isEmpty && text.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ForEach(suggestions) { suggestion in
-                            SuggestionChip(
-                                title: suggestion.title,
-                                icon: suggestion.icon,
-                                action: suggestion.action
-                            )
+                            SuggestionChip(title: suggestion.title, icon: "sparkles", action: suggestion.action)
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 8)
                 }
                 .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
                 .overlay(
@@ -793,17 +758,20 @@ struct ModernChatInput: View {
             
             // Input area
             HStack(spacing: 12) {
-                // Image upload button
-                Button(action: {
-                    onImageUpload?()
-                }) {
-                    Image(systemName: "camera.viewfinder")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.1))
+                // Minimal image upload orb
+                Button(action: { onImageUpload?() }) {
+                    Circle()
+                        .fill(LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                        )
+                        .shadow(color: .purple.opacity(0.25), radius: 6, x: 0, y: 3)
+                        .overlay(
+                            Text("+")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
                         )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -828,16 +796,21 @@ struct ModernChatInput: View {
                         )
                         .animation(.easeInOut(duration: 0.2), value: isFocused)
                     
-                    // Send button
+                    // Send button (clean arrow without SF symbol blockiness)
                     Button(action: {
                         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             onSend(text)
                             text = ""
                         }
                     }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundColor(text.isEmpty ? Color.gray : Color.blue)
+                        Circle()
+                            .fill(text.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.25)) : AnyShapeStyle(LinearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Text("↗")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(text.isEmpty ? .gray : .white)
+                            )
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .scaleEffect(text.isEmpty ? 0.9 : 1.0)

@@ -18,6 +18,12 @@ class ModernSettingsViewModel: ObservableObject {
     @Published var newsSources: String = "All Sources"
     @Published var showConfidenceScores: Bool = true
     @Published var autoAnalyzeWatchlist: Bool = false
+    @Published var compactLayout: Bool = false
+    @Published var realTimeData: Bool = true
+    @Published var extendedHours: Bool = false
+    @Published var autoRefresh: Bool = true
+    @Published var analyticsEnabled: Bool = true
+    @Published var crashReports: Bool = true
     
     // MARK: - UI State
     @Published var showingProfileEditor: Bool = false
@@ -62,6 +68,12 @@ class ModernSettingsViewModel: ObservableObject {
         newsSources = userDefaults.string(forKey: "newsSources") ?? "All Sources"
         showConfidenceScores = userDefaults.bool(forKey: "showConfidenceScores")
         autoAnalyzeWatchlist = userDefaults.bool(forKey: "autoAnalyzeWatchlist")
+        compactLayout = userDefaults.bool(forKey: "compactLayout")
+        realTimeData = userDefaults.bool(forKey: "realTimeData")
+        extendedHours = userDefaults.bool(forKey: "extendedHours")
+        autoRefresh = userDefaults.bool(forKey: "autoRefresh")
+        analyticsEnabled = userDefaults.bool(forKey: "analyticsEnabled")
+        crashReports = userDefaults.bool(forKey: "crashReports")
     }
     
     private func setupObservers() {
