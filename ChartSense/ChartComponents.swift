@@ -7,6 +7,17 @@
 
 import SwiftUI
 import Charts
+import UIKit
+
+// MARK: - Haptics
+enum Haptics {
+    static func light() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+}
 
 // MARK: - Professional Chart Components
 struct ProfessionalChartView: View {

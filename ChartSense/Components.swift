@@ -885,6 +885,66 @@ struct RoundedCorner: Shape {
     }
 }
 
+// MARK: - App Icon Wrapper
+struct AppRoundedIcon: View {
+    let size: CGFloat
+    @Environment(\.theme) private var theme
+    
+    init(size: CGFloat = 32) { self.size = size }
+    
+    var body: some View {
+        ZStack {
+            // Subtle container with continuous corner
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(theme.colors.secondaryBackground)
+                .frame(width: size, height: size)
+                .overlay(
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .stroke(theme.colors.divider, lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+            
+            // App icon from asset catalog, scaled to fit with gentle inset
+            Image("AppIconImage")
+                .resizable()
+                .scaledToFit()
+                .frame(width: size * 0.76, height: size * 0.76)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        }
+    }
+}
+
+// MARK: - Reusable Upgrade Pill Button (used across app)
+struct UpgradePillButton: View {
+    let title: String
+    let action: () -> Void
+    @Environment(\.theme) private var theme
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                LinearGradient(
+                    colors: [theme.colors.primary, theme.colors.secondary],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(10)
+            .shadow(color: theme.colors.primary.opacity(0.25), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // MARK: - Authentication Components
 struct AuthButton: View {
     let title: String
@@ -1467,16 +1527,35 @@ struct RealTimePriceView: View {
 
 struct ConnectionStatusView: View {
     @StateObject private var webSocketService = WebSocketService.shared
+    @State private var showingErrorDetails = false
     
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(connectionColor)
-                .frame(width: 8, height: 8)
+                .frame(width: 6, height: 6)
             
-            Text(connectionText)
-                .font(.caption)
+            Text(shortLabel)
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.12))
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if case .error = webSocketService.connectionStatus {
+                showingErrorDetails = true
+            }
+        }
+        .alert("Connection issue", isPresented: $showingErrorDetails) {
+            Button("Dismiss", role: .cancel) {}
+            Button("Reconnect") { webSocketService.connect() }
+        } message: {
+            Text(errorDetails)
         }
     }
     
@@ -1491,17 +1570,24 @@ struct ConnectionStatusView: View {
         }
     }
     
-    private var connectionText: String {
+    private var shortLabel: String {
         switch webSocketService.connectionStatus {
         case .connected:
             return "Live"
         case .connecting:
-            return "Connecting..."
+            return "Connecting"
         case .disconnected:
             return "Offline"
-        case .error(let message):
-            return "Error: \(message)"
+        case .error:
+            return "Error"
         }
+    }
+    
+    private var errorDetails: String {
+        if case .error(let message) = webSocketService.connectionStatus {
+            return ErrorMessageParser.parseUserFriendlyMessage(message)
+        }
+        return ""
     }
 }
 

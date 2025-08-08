@@ -334,6 +334,7 @@ struct ModernWatchlistCard: View {
     @State private var showingOptions = false
     @State private var isPressed = false
     @State private var animateCard = false
+    @State private var showDeleteConfirm = false
     
     var body: some View {
         Button(action: {
@@ -363,49 +364,93 @@ struct ModernWatchlistCard: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .allowsTightening(true)
                     }
                     Spacer(minLength: 8)
-                    // Right: Price/Change and alert toggle inline
-                    VStack(alignment: .trailing, spacing: 6) {
-                        if let stock = stock {
-                            Text(stock.formattedPrice)
-                                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            HStack(spacing: 6) {
-                                Text(stock.isPositiveChange ? "↗" : "↘")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(stock.isPositiveChange ? .green : .red)
-                                Text(stock.formattedChangePercent)
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(stock.isPositiveChange ? .green : .red)
+                    // Right: Price/Change + vertical quick actions to conserve space
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if let stock = stock {
+                                Text(stock.formattedPrice)
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.6)
+                                    .allowsTightening(true)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                HStack(spacing: 6) {
+                                    Image(systemName: stock.isPositiveChange ? "arrow.up.right" : "arrow.down.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text(stock.formattedChangePercent)
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundColor(stock.isPositiveChange ? .green : .red)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background((stock.isPositiveChange ? Color.green : Color.red).opacity(0.12))
+                                .clipShape(Capsule())
+                            } else {
+                                Text("--")
+                                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                Text("Loading…")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                             }
-                        } else {
-                            Text("--")
-                                .font(.system(size: 20, weight: .bold, design: .monospaced))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                            Text("Loading…")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                         }
+                        .layoutPriority(2)
+                        VStack(spacing: 8) {
+                            Button(action: {
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                                onToggleAlerts()
+                            }) {
+                                Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
+                                    .frame(width: 30, height: 30)
+                                    .background(
+                                        Circle().fill(
+                                            item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15) : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                                        )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: {
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                                showDeleteConfirm = true
+                            }) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 30, height: 30)
+                                    .background(
+                                        Circle().fill(Color.red.opacity(0.85))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .confirmationDialog(item.symbol, isPresented: $showDeleteConfirm) {
+                                Button("Delete", role: .destructive) {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                        onRemove()
+                                    }
+                                }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("Remove from watchlist?")
+                            }
+                        }
+                        .frame(width: 34)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .allowsTightening(true)
                     }
-                    Button(action: {
-                        let generator = UIImpactFeedbackGenerator(style: .light)
-                        generator.impactOccurred()
-                        onToggleAlerts()
-                    }) {
-                        Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
-                            .frame(width: 30, height: 30)
-                            .background(
-                                Circle().fill(
-                                    item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15) : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                                )
-                            )
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 26)
+                .padding(.horizontal, 20)
                 .padding(.top, 24)
                 .padding(.bottom, 18)
                 
@@ -487,6 +532,17 @@ struct ModernWatchlistCard: View {
             .animation(.easeInOut(duration: 0.12), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                let gen = UINotificationFeedbackGenerator()
+                gen.notificationOccurred(.success)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    onRemove()
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
     
     private func sentimentColor(_ sentiment: SentimentAnalysis) -> Color {
