@@ -117,15 +117,15 @@ struct PremiumUpsellBanner: View {
                 }
                 
                 // Text stack
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Premium")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    Text("Upgrade to Premium to add unlimited stocks to your watchlist.")
-                        .font(.system(size: 12, weight: .medium))
+                    Text("Add unlimited stocks to your watchlist.")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.95)
+                        .minimumScaleFactor(0.98)
                 }
                 
                 Spacer()
@@ -133,10 +133,10 @@ struct PremiumUpsellBanner: View {
                 // CTA button
                 Button(action: onUpgrade) {
                     Text("Upgrade")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
                         .background(
                             Capsule()
                                 .fill(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
@@ -145,10 +145,10 @@ struct PremiumUpsellBanner: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
-        .frame(height: 72)
+        .frame(height: 82)
     }
 }
 
@@ -572,6 +572,7 @@ struct ModernAddStockSheet: View {
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var watchlistViewModel = WatchlistViewModel.shared
     @StateObject private var premiumManager = PremiumManager.shared
+    @State private var showLimitAlert = false
     
     var body: some View {
         NavigationView {
@@ -637,7 +638,8 @@ struct ModernAddStockSheet: View {
                                     onAdd: { stock in
                                         onAdd(stock)
                                         dismiss()
-                                    }
+                                    },
+                                    onLimitReached: { showLimitAlert = true }
                                 )
                             }
                         }
@@ -681,6 +683,15 @@ struct ModernAddStockSheet: View {
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
             .navigationBarHidden(true)
         }
+        .sheet(isPresented: $premiumManager.showingPremiumUpgrade) {
+            PremiumUpgradeView()
+        }
+        .alert("Upgrade to add more stocks", isPresented: $showLimitAlert) {
+            Button("Not now", role: .cancel) {}
+            Button("Upgrade") { premiumManager.showingPremiumUpgrade = true }
+        } message: {
+            Text("Free users can track 1 stock. Upgrade to Premium for unlimited watchlist.")
+        }
     }
 }
 
@@ -688,6 +699,7 @@ struct ModernAddStockSheet: View {
 struct ModernAddStockRow: View {
     let stock: Stock
     let onAdd: (Stock) -> Void
+    var onLimitReached: (() -> Void)? = nil
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var watchlistViewModel = WatchlistViewModel.shared
     @StateObject private var premiumManager = PremiumManager.shared
@@ -733,6 +745,12 @@ struct ModernAddStockRow: View {
             // Add haptic feedback
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
+            
+            if isLimitReached {
+                onLimitReached?()
+                return
+            }
+            if isStockInWatchlist { return }
             
             print("🔄 Calling onAdd callback...")
             onAdd(stock)
@@ -794,8 +812,11 @@ struct ModernAddStockRow: View {
                     // Add haptic feedback
                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                     impactFeedback.impactOccurred()
-                    
-                    onAdd(stock)
+                    if isLimitReached {
+                        onLimitReached?()
+                    } else if !isStockInWatchlist {
+                        onAdd(stock)
+                    }
                 }) {
                     ZStack {
                         Circle()
