@@ -137,13 +137,14 @@ struct ChartPoint: Identifiable, Equatable {
 // MARK: - Ultra-Clean Chart Tab
 struct UltraCleanChartTab: View {
     let stock: Stock
-    @State private var range: ChartRange = .oneDay
+    @Binding var range: ChartRange
     @State private var points: [ChartPoint] = []
-    @State private var isLoading: Bool = true
+    @State private var isLoading: Bool = false
     @State private var isScrubbing: Bool = false
     @State private var scrubIndex: Int? = nil
     @State private var crossedBaselinePreviouslyAbove: Bool? = nil
     @State private var fadeIn: Bool = false
+    @State private var drawProgress: Double = 1.0
     @StateObject private var themeManager = ThemeManager.shared
 
     private var trendColor: Color { stock.dailyChange >= 0 ? Color.bullish : Color.bearish }
@@ -163,61 +164,51 @@ struct UltraCleanChartTab: View {
     private var delta: Double { displayPrice - baseline }
     private var deltaPercent: Double { baseline == 0 ? 0 : (delta / baseline * 100.0) }
     private var isPositiveDelta: Bool { delta >= 0 }
+    private var chartHeight: CGFloat {
+        let screenH = UIScreen.main.bounds.height
+        // Target roughly half the screen, bounded for small/large devices
+        return min(480, max(320, screenH * 0.52))
+    }
 
     var body: some View {
         VStack(spacing: 16) {
-
             // Chart Area
-            ZStack {
-                if isLoading {
-                    // Calm skeleton
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill((themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground))
-                        .shimmer()
-                        .frame(height: 260)
-                        .padding(.horizontal, 12)
-                } else {
-                    UltraCleanChart(
-                        points: points,
-                        lineGradient: LinearGradient(
-                            colors: [
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        fillGradient: LinearGradient(
-                            colors: [
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.25),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        showFill: false,
-                        isScrubbing: $isScrubbing,
-                        scrubIndex: $scrubIndex,
-                        baseline: baseline,
-                        onScrubBegan: { Haptics.light() },
-                        onScrubEnded: { Haptics.selection() },
-                        onCrossBaseline: { crossedAbove in
-                            if let prev = crossedBaselinePreviouslyAbove, prev != crossedAbove { Haptics.selection() }
-                            crossedBaselinePreviouslyAbove = crossedAbove
-                        }
-                    )
-                    .frame(height: 260)
-                    .padding(.horizontal, 0)
-                    .transition(.opacity)
+            UltraCleanChart(
+                points: points,
+                lineGradient: LinearGradient(
+                    colors: [
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                fillGradient: LinearGradient(
+                    colors: [
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.25),
+                        Color.clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                showFill: false,
+                progress: drawProgress,
+                isScrubbing: $isScrubbing,
+                scrubIndex: $scrubIndex,
+                baseline: baseline,
+                onScrubBegan: { Haptics.light() },
+                onScrubEnded: { Haptics.selection() },
+                onCrossBaseline: { crossedAbove in
+                    if let prev = crossedBaselinePreviouslyAbove, prev != crossedAbove { Haptics.selection() }
+                    crossedBaselinePreviouslyAbove = crossedAbove
                 }
-            }
-
-            // Range Selector
-            RangeSelector(range: $range)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+            )
+            .frame(height: chartHeight)
+            .padding(.horizontal, 0)
+            .transition(.opacity)
         }
         .padding(.top, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
         .onAppear { loadData(animated: true) }
         .onChange(of: range) { _ in
@@ -227,18 +218,18 @@ struct UltraCleanChartTab: View {
     }
 
     private func loadData(animated: Bool) {
-        isLoading = true
         fadeIn = false
         DispatchQueue.global(qos: .userInitiated).async {
             let generated = generatePoints(for: stock, range: range)
             let downsampled = downsample(points: generated, targetCount: 240)
             DispatchQueue.main.async {
-                withAnimation(animated ? .easeInOut(duration: 0.35) : .none) {
-                    self.points = downsampled
-                    self.isLoading = false
-                    self.scrubIndex = nil
-                    self.isScrubbing = false
-                    self.fadeIn = true
+                self.points = downsampled
+                self.scrubIndex = nil
+                self.isScrubbing = false
+                self.fadeIn = true
+                self.drawProgress = 0.0
+                withAnimation(.easeInOut(duration: 0.9)) {
+                    self.drawProgress = 1.0
                 }
             }
         }
@@ -300,7 +291,7 @@ struct UltraCleanChartTab: View {
 }
 
 // MARK: - Range Selector (enhanced pills)
-private struct RangeSelector: View {
+struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
     var body: some View {
@@ -362,6 +353,7 @@ private struct UltraCleanChart: View {
     let lineGradient: LinearGradient
     let fillGradient: LinearGradient
     let showFill: Bool
+    let progress: Double
     @Binding var isScrubbing: Bool
     @Binding var scrubIndex: Int?
     let baseline: Double
@@ -425,8 +417,11 @@ private struct UltraCleanChart: View {
 
                 // Line with subtle glow
                 Path { p in
-                    if let first = normalized.first { p.move(to: first) }
-                    for pt in normalized.dropFirst() { p.addLine(to: pt) }
+                    guard !normalized.isEmpty else { return }
+                    let visibleCount = max(1, Int(Double(normalized.count) * progress))
+                    let slice = normalized.prefix(visibleCount)
+                    if let first = slice.first { p.move(to: first) }
+                    for pt in slice.dropFirst() { p.addLine(to: pt) }
                 }
                 .stroke(lineGradient, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
                 .shadow(color: Color.white.opacity(0.06), radius: 2, x: 0, y: 0)

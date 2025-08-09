@@ -61,6 +61,7 @@ struct ModernStockDetailView: View {
     @State private var selectedTab = 0
     @State private var showingAddToWatchlist = false
     @State private var currentStock: Stock
+    @State private var chartRange: ChartRange = .oneDay
     
     private let tabs = ["Chart", "Sentiment", "Analysis", "Community"]
     
@@ -87,7 +88,7 @@ struct ModernStockDetailView: View {
             // Tab Content
             TabView(selection: $selectedTab) {
                 // Chart Tab
-                UltraCleanChartTab(stock: currentStock)
+                UltraCleanChartTab(stock: currentStock, range: $chartRange)
                     .tag(0)
 
                 // Sentiment Tab
@@ -104,9 +105,21 @@ struct ModernStockDetailView: View {
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
             .animation(.easeInOut(duration: 0.3), value: selectedTab)
+            // Reserve space so the bottom overlay doesn't overlap the chart
+            .padding(.bottom, selectedTab == 0 ? 68 : 0)
         }
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
         .navigationBarHidden(true)
+        // Timeframe control pinned to the device bottom, visible only on Chart tab
+        .overlay(alignment: .bottom) {
+            if selectedTab == 0 {
+                RangeSelector(range: $chartRange)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 0)
+                    .ignoresSafeArea(.all, edges: .bottom)
+                    .offset(y: -12)
+            }
+        }
         .sheet(isPresented: $showingAddToWatchlist) {
             AddToWatchlistSheet(stock: currentStock)
         }
@@ -405,12 +418,7 @@ struct ModernTabBar: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border),
-            alignment: .bottom
-        )
+        // Removed bottom divider for a seamless transition into content
     }
 }
 
