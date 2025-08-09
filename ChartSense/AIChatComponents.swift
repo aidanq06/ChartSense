@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import PhotosUI
+import UIKit
 
 // MARK: - AI Chat Models
 // Using ChatMessage from Item.swift
@@ -29,51 +30,67 @@ struct ModernAIChatView: View {
     @State private var showingImagePicker = false
     @State private var showingImageAnalysis = false
     @State private var selectedImage: UIImage?
+    private let bottomAnchorId = "bottom"
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             AIChatHeader()
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+                .background(
+                    (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+                        .ignoresSafeArea(edges: .top)
+                )
             
             // Messages
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    // Welcome message
-                    if viewModel.messages.isEmpty {
-                        WelcomeMessage()
-                    }
-                    
-                    // Chat messages
-                    ForEach(viewModel.messages) { message in
-                        MessageBubble(message: message)
-                            .id(message.id)
-                    }
-                    
-                    // Loading indicator
-                    if viewModel.isTyping {
-                        AITypingIndicator()
-                            .id("typing")
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-            }
-            .onChange(of: viewModel.messages.count) { _ in
-                // Auto-scroll to bottom when new messages arrive
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        // Scroll to bottom
-                    }
-                }
-            }
-            .onChange(of: viewModel.isTyping) { isTyping in
-                if isTyping {
-                    // Auto-scroll to bottom when typing starts
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            // Scroll to bottom
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 20) {
+                        // Welcome message
+                        if viewModel.messages.isEmpty {
+                            WelcomeMessage(
+                                onAskStock: { isInputFocused = true },
+                                onUploadChart: { showingImagePicker = true },
+                                quickActions: viewModel.suggestions
+                            )
                         }
+                        
+                        // Chat messages with day dividers
+                        ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
+                            if shouldShowDayDivider(at: index) {
+                                DayDivider(date: message.timestamp)
+                            }
+                            MessageBubble(message: message)
+                                .id(message.id)
+                        }
+                        
+                        // Loading indicator
+                        if viewModel.isTyping {
+                            AITypingIndicator()
+                                .id("typing")
+                        }
+                        
+                        // Bottom anchor for smooth scrolling
+                        Color.clear
+                            .frame(height: 1)
+                            .id(bottomAnchorId)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                }
+                .onTapGesture { isInputFocused = false }
+                .onChange(of: viewModel.messages.count) { _ in
+                    scrollToBottom(proxy)
+                }
+                .onChange(of: viewModel.isTyping) { isTyping in
+                    if isTyping { scrollToBottom(proxy) }
+                }
+                .onChange(of: isInputFocused) { focused in
+                    if focused { scrollToBottom(proxy) }
+                }
+                .onAppear {
+                    scrollToBottom(proxy)
                 }
             }
             
@@ -113,6 +130,21 @@ struct ModernAIChatView: View {
                 )
             }
         }
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo(bottomAnchorId, anchor: .bottom)
+            }
+        }
+    }
+
+    private func shouldShowDayDivider(at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        let current = viewModel.messages[index].timestamp
+        let previous = viewModel.messages[index - 1].timestamp
+        return !Calendar.current.isDate(current, inSameDayAs: previous)
     }
 }
 
@@ -441,48 +473,58 @@ struct AIChatHeader: View {
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var premiumManager = PremiumManager.shared
     private let dailyFreeLimit: Double = 5
+    #if DEBUG
+    @AppStorage("debug_forceFreeHeader") private var debugForceFreeHeader = false
+    #endif
     
     var body: some View {
-        HStack(spacing: 12) {
-            // App icon inside a refined rounded container
-            AppRoundedIcon(size: 32)
+        VStack(alignment: .leading, spacing: 10) {
+            // Top Row: Icon, Title, Upgrade
+            HStack(spacing: 12) {
+                AppRoundedIcon(size: 32)
+                    #if DEBUG
+                    .onLongPressGesture { debugForceFreeHeader.toggle() }
+                    #endif
 
-            // Title only for extreme cleanliness
-            Text("ChartSense AI")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                Text("ChartSense AI")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+                    .truncationMode(.tail)
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            if !premiumManager.isPremium {
-                HStack(spacing: 8) {
-                    // Remaining messages pill with ultra-thin progress bar
-                    VStack(spacing: 2) {
-                        Text("\(premiumManager.aiMessagesRemaining) left today")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        ProgressView(value: progressValue)
-                            .progressViewStyle(LinearProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                            .frame(width: 64)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .cornerRadius(8)
-
-                    // Minimal upgrade pill
+                if shouldShowLimitUI {
                     UpgradePillButton(title: "Upgrade") {
                         premiumManager.showPremiumUpgrade()
                     }
                 }
             }
+
+            // Second Row: Limits (separate line to avoid truncation)
+            if shouldShowLimitUI {
+                HStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("\(premiumManager.aiMessagesRemaining) left today · \(Int(dailyFreeLimit))/day")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        ProgressView(value: progressValue)
+                            .progressViewStyle(LinearProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
+                            .frame(maxWidth: 120)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .cornerRadius(10)
+                }
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
         .overlay(
             Rectangle()
@@ -497,11 +539,18 @@ struct AIChatHeader: View {
         let remaining = Double(max(premiumManager.aiMessagesRemaining, 0))
         return min(max(remaining / dailyFreeLimit, 0), 1)
     }
+    
+    private var shouldShowLimitUI: Bool {
+        #if DEBUG
+        if debugForceFreeHeader { return true }
+        #endif
+        return !premiumManager.isPremium
+    }
 }
 
 // MARK: - AI Chat Avatar
 struct AIChatAvatar: View {
-    @State private var isAnimating = false
+    var size: CGFloat = 28
     
     var body: some View {
         ZStack {
@@ -513,22 +562,21 @@ struct AIChatAvatar: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 36, height: 36)
-                .scaleEffect(isAnimating ? 1.05 : 1.0)
-                .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isAnimating)
+                .frame(width: size, height: size)
             
             Image(systemName: "brain.head.profile")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: size * 0.5, weight: .medium))
                 .foregroundColor(.white)
-        }
-        .onAppear {
-            isAnimating = true
         }
     }
 }
 
 // MARK: - Welcome Message
 struct WelcomeMessage: View {
+    let onAskStock: () -> Void
+    let onUploadChart: () -> Void
+    let quickActions: [AISuggestion]
+    
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
@@ -543,60 +591,66 @@ struct WelcomeMessage: View {
                         .truncationMode(.tail)
                     
                     VStack(spacing: 10) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Ask about a stock")
+                        Button(action: onAskStock) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                    .lineLimit(1)
-                                Text("Concise answers with clean visuals")
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Ask about a stock")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                        .lineLimit(1)
+                                    Text("Concise answers with clean visuals")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                                    .lineLimit(1)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                            .padding(10)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                            .cornerRadius(10)
                         }
-                        .padding(10)
-                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                        .cornerRadius(10)
+                        .buttonStyle(PlainButtonStyle())
                         
-                        HStack(spacing: 10) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Upload a chart")
+                        Button(action: onUploadChart) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "photo")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                    .lineLimit(1)
-                                Text("Get patterns, levels, and a plan")
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Upload a chart")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                        .lineLimit(1)
+                                    Text("Get patterns, levels, and a plan")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                                    .lineLimit(1)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                            .padding(10)
+                            .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+                            .cornerRadius(10)
                         }
-                        .padding(10)
-                        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-                        .cornerRadius(10)
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
             }
             
             // Compact suggestion row
             HStack(spacing: 8) {
-                SuggestionChip(title: "Analyze AAPL", icon: "sparkles")
-                SuggestionChip(title: "Market trends", icon: "sparkles")
-                SuggestionChip(title: "Upload chart", icon: "sparkles")
+                ForEach(quickActions.prefix(3)) { suggestion in
+                    SuggestionChip(title: suggestion.title, icon: suggestion.icon, action: suggestion.action)
+                }
             }
         }
     }
@@ -615,7 +669,7 @@ struct MessageBubble: View {
                 
                 VStack(alignment: .trailing, spacing: 4) {
                     // User message
-                    Text(message.content)
+                    MarkdownText(message.content)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
@@ -623,6 +677,8 @@ struct MessageBubble: View {
                         .background(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                         .cornerRadius(18)
                         .cornerRadius(4, corners: .topLeft)
+                        .textSelection(.enabled)
+                        .lineSpacing(2)
                     
                     // Timestamp
                     Text(message.timestamp, style: .time)
@@ -642,12 +698,12 @@ struct MessageBubble: View {
                 
             } else {
                 // AI Avatar
-                AIChatAvatar()
+                AIChatAvatar(size: 28)
                     .frame(width: 28, height: 28)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     // AI message
-                    Text(message.content)
+                    MarkdownText(message.content)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         .padding(.horizontal, 16)
@@ -659,6 +715,8 @@ struct MessageBubble: View {
                             RoundedRectangle(cornerRadius: 18)
                                 .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
                         )
+                        .textSelection(.enabled)
+                        .lineSpacing(2)
                     
                     // Timestamp
                     Text(message.timestamp, style: .time)
@@ -682,22 +740,51 @@ struct MessageBubble: View {
         .onAppear {
             isAppearing = true
         }
+        .contextMenu {
+            Button(action: { UIPasteboard.general.string = message.content }) {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            ShareLink(item: message.content) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+    }
+}
+
+// MARK: - MarkdownText helper
+private struct MarkdownText: View {
+    let content: String
+    
+    init(_ content: String) { self.content = content }
+    
+    var body: some View {
+        Group {
+            if let attr = try? AttributedString(
+                markdown: content,
+                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+            ) {
+                Text(attr)
+            } else {
+                Text(content)
+            }
+        }
     }
 }
 
 // MARK: - AI Typing Indicator
 struct AITypingIndicator: View {
     @State private var dotOffset: CGFloat = 0
+    @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            AIChatAvatar()
+            AIChatAvatar(size: 28)
                 .frame(width: 28, height: 28)
             
             HStack(spacing: 4) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
-                        .fill(Color.gray)
+                        .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
                         .frame(width: 6, height: 6)
                         .offset(y: dotOffset)
                         .animation(
@@ -710,15 +797,52 @@ struct AITypingIndicator: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(.systemGray6))
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
             .cornerRadius(18)
             .cornerRadius(4, corners: .topRight)
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+            )
             
             Spacer(minLength: 60)
         }
         .onAppear {
             dotOffset = -5
         }
+    }
+}
+
+// MARK: - Day Divider
+private struct DayDivider: View {
+    let date: Date
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+    
+    var body: some View {
+        HStack {
+            Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 1)
+            Text(Self.formatter.string(from: date))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.gray)
+                .padding(.horizontal, 8)
+            Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 1)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Haptics
+enum AIHaptics {
+    static func light() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 }
 
@@ -758,7 +882,10 @@ struct ModernChatInput: View {
             // Input area
             HStack(spacing: 12) {
                 // Minimal upload button
-                Button(action: { onImageUpload?() }) {
+                Button(action: {
+                    AIHaptics.light()
+                    onImageUpload?()
+                }) {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
                         .frame(width: 36, height: 36)
@@ -797,6 +924,7 @@ struct ModernChatInput: View {
                     // Send button (clean arrow without SF symbol blockiness)
                     Button(action: {
                         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            AIHaptics.light()
                             onSend(text)
                             text = ""
                         }
@@ -845,6 +973,7 @@ struct SuggestionChip: View {
     
     var body: some View {
         Button(action: {
+            AIHaptics.light()
             action?()
         }) {
             HStack(spacing: 6) {

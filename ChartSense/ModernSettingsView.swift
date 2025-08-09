@@ -475,6 +475,16 @@ struct AccountSupportSection: View {
             // Support Section
             ModernSettingsSection(title: "Support", icon: "questionmark.circle.fill") {
                 VStack(spacing: 12) {
+                    #if DEBUG
+                    ModernActionCard(
+                        title: "Debug: Downgrade to Free",
+                        subtitle: "Clear premium state and limits",
+                        icon: "crown",
+                        color: .red
+                    ) {
+                        Task { await PremiumManager.shared.debugForceDowngradeToFree() }
+                    }
+                    #endif
                     ModernActionCard(
                         title: "Help & FAQ",
                         subtitle: "Get help and find answers",

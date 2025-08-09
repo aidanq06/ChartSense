@@ -215,6 +215,31 @@ class PremiumManager: ObservableObject {
         
         print("✅ Premium activated: \(planId)")
     }
+
+    // MARK: - DEBUG: Force Downgrade to Free (comprehensive reset)
+    func debugForceDowngradeToFree() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Local persistence reset
+        isPremium = false
+        subscriptionStatus = .free
+        aiMessagesRemaining = 5
+        aiMessagesUsedToday = 0
+        lastMessageResetDate = Date()
+        imageAnalysisRemaining = 1
+        imageAnalysisUsedToday = 0
+        lastImageAnalysisResetDate = Date()
+        saveSubscriptionStatus()
+        saveMessageCount()
+        saveImageAnalysisCount()
+        updatePremiumFeatures()
+        
+        // Best-effort remote state clear (if you maintain a flag server-side later)
+        await SupabaseService.tryMarkUserAsFree()
+        
+        print("🧹 Debug: Forced downgrade to free completed")
+    }
     
     private func updatePremiumFeatures() {
         for i in 0..<premiumFeatures.count {

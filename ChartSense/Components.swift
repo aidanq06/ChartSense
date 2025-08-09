@@ -927,9 +927,11 @@ struct UpgradePillButton: View {
                     .font(.system(size: 11, weight: .bold))
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
             }
             .foregroundColor(.white)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 LinearGradient(
@@ -939,6 +941,8 @@ struct UpgradePillButton: View {
                 )
             )
             .cornerRadius(10)
+            .frame(minWidth: 84, minHeight: 28)
+            .fixedSize(horizontal: true, vertical: true)
             .shadow(color: theme.colors.primary.opacity(0.25), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(PlainButtonStyle())

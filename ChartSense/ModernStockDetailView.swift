@@ -113,6 +113,8 @@ struct ModernStockDetailView: View {
             AddToWatchlistSheet(stock: currentStock)
         }
         .onAppear {
+            // Default to Chart tab on entry
+            selectedTab = 0
             // Debug: Print stock data
             print("💰 Stock detail view for \(currentStock.symbol): price=\(currentStock.currentPrice), change=\(currentStock.dailyChange), dailyChangePercent=\(currentStock.dailyChangePercent)")
             
@@ -383,7 +385,7 @@ struct ModernTabBar: View {
                         selectedTab = index
                     }
                 }) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 10) {
                         Text(tabs[index])
                             .font(.system(size: 16, weight: selectedTab == index ? .semibold : .medium))
                             .foregroundColor(
@@ -391,15 +393,12 @@ struct ModernTabBar: View {
                                 ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                                 : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             )
-                        
-                        Rectangle()
+                        Capsule()
                             .fill(
-                                selectedTab == index 
-                                ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                                : Color.clear
+                                LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing)
+                                    .opacity(selectedTab == index ? 1.0 : 0.0)
                             )
                             .frame(height: 3)
-                            .cornerRadius(1.5)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -1007,10 +1006,10 @@ struct ProfessionalChartTab: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Chart Area
-            ProfessionalChartView(
+            // Chart Area (New Sense Chart)
+            SenseChartHost(
                 stock: stock,
-                timeframe: selectedTimeframe,
+                selectedTimeframe: $selectedTimeframe,
                 selectedPoint: $selectedPoint
             )
             

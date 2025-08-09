@@ -1279,6 +1279,29 @@ extension SupabaseService {
     }
 }
 
+// MARK: - Premium Helpers (best-effort, optional)
+extension SupabaseService {
+    /// Attempts to mark current user as free on the backend. If no premium
+    /// state exists server-side, this call is harmless.
+    static func tryMarkUserAsFree() async {
+        let service = SupabaseService.shared
+        guard let userId = service.currentUser?.id else { return }
+        guard let supabaseURL = service.supabaseURL, let anonKey = service.supabaseAnonKey else { return }
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/user_profiles?id=eq.\(userId)") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        let body = ["is_premium": false]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse { print("🔎 tryMarkUserAsFree status: \(http.statusCode)") }
+        } catch { print("⚠️ tryMarkUserAsFree failed: \(error)") }
+    }
+}
+
 fileprivate struct KeychainHelper {
     static func save(_ value: String, for key: String) {
         let data = Data(value.utf8)

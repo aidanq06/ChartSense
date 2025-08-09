@@ -1,3 +1,397 @@
+import SwiftUI
+
+// MARK: - Alerts Sheet (Comprehensive, modern, premium UI)
+struct AlertsSheet: View {
+    let item: WatchlistItem
+    let stock: Stock
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var premiumManager = PremiumManager.shared
+    @StateObject private var watchlistVM = WatchlistViewModel.shared
+
+    // Local form state
+    @State private var priceAlertsEnabled = true
+    @State private var targetAbove: String = ""
+    @State private var targetBelow: String = ""
+    @State private var sentimentAlertsEnabled = true
+    @State private var sentimentThreshold: Double = 0.2
+    @State private var newsAlertsEnabled = true
+    @State private var includeEarnings = true
+    @State private var includeDowngrades = true
+    @State private var includeMAndA = true
+    @State private var deliveryPush = true
+    @State private var deliveryEmail = false
+    @State private var deliveryInApp = true
+    @State private var isSaving = false
+    @State private var showSavedToast = false
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    priceSection
+                    sentimentSection
+                    newsSection
+                    deliverySection
+                    footerNote
+                }
+                .padding(20)
+            }
+            .background(backgroundDecor)
+            .navigationBarHidden(true)
+            .overlay(navBar, alignment: .top)
+        }
+        .safeAreaInset(edge: .bottom) { actionBar }
+        .overlay(savedToast, alignment: .bottom)
+        .onAppear {
+            targetAbove = String(format: "%.2f", max(stock.currentPrice * 1.02, stock.currentPrice + 0.01))
+            targetBelow = String(format: "%.2f", max(stock.currentPrice * 0.98, 0))
+            priceAlertsEnabled = item.alertsEnabled
+            // Restore local prefs
+            let key = item.symbol
+            sentimentAlertsEnabled = UserDefaults.standard.object(forKey: "alerts.sentiment.enabled.\(key)") as? Bool ?? true
+            sentimentThreshold = UserDefaults.standard.object(forKey: "alerts.sentiment.threshold.\(key)") as? Double ?? 0.2
+            newsAlertsEnabled = UserDefaults.standard.object(forKey: "alerts.news.enabled.\(key)") as? Bool ?? true
+            includeEarnings = UserDefaults.standard.object(forKey: "alerts.news.earnings.\(key)") as? Bool ?? true
+            includeDowngrades = UserDefaults.standard.object(forKey: "alerts.news.downgrades.\(key)") as? Bool ?? true
+            includeMAndA = UserDefaults.standard.object(forKey: "alerts.news.mna.\(key)") as? Bool ?? true
+            deliveryPush = UserDefaults.standard.object(forKey: "alerts.delivery.push.\(key)") as? Bool ?? true
+            deliveryInApp = UserDefaults.standard.object(forKey: "alerts.delivery.inapp.\(key)") as? Bool ?? true
+            deliveryEmail = UserDefaults.standard.object(forKey: "alerts.delivery.email.\(key)") as? Bool ?? false
+        }
+    }
+
+    // MARK: - Sections
+    private var navBar: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(themeTextSecondary)
+                    .frame(width: 32, height: 32)
+                    .background(themeCard)
+                    .cornerRadius(8)
+            }
+            Spacer()
+            Text("Alerts")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(themeTextPrimary)
+            Spacer()
+            Color.clear.frame(width: 32, height: 32)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(themeBackground)
+    }
+
+    // Removed hero header per design: no ticker name or current price in Alerts sheet
+
+    private var priceSection: some View {
+        SectionCard(title: "Price Alerts", subtitle: "Notify me when price crosses targets", icon: "dollarsign.circle") {
+            ToggleRow(isOn: $priceAlertsEnabled)
+            if priceAlertsEnabled {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
+                    GridRow {
+                        LabeledField(label: "Above", text: $targetAbove, prefix: "$", step: 0.1)
+                        LabeledField(label: "Below", text: $targetBelow, prefix: "$", step: 0.1)
+                    }
+                }
+            }
+        }
+    }
+
+    private var sentimentSection: some View {
+        SectionCard(title: "Sentiment Alerts", subtitle: "Ping me when AI sentiment shifts", icon: "face.smiling") {
+            ToggleRow(isOn: $sentimentAlertsEnabled)
+            if sentimentAlertsEnabled {
+                VStack(spacing: 10) {
+                    HStack {
+                        Text("Threshold")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(themeTextSecondary)
+                        Spacer()
+                        Text(String(format: "%.0f%%", sentimentThreshold * 100))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(themeTextPrimary)
+                    }
+                    Slider(value: $sentimentThreshold, in: 0...1)
+                        .tint(themeAccent)
+                }
+            }
+        }
+    }
+
+    private var newsSection: some View {
+        SectionCard(title: "News Alerts", subtitle: "Only what matters, no noise", icon: "newspaper") {
+            ToggleRow(isOn: $newsAlertsEnabled)
+            if newsAlertsEnabled {
+                VStack(spacing: 10) {
+                    FilterPillRow(
+                        items: [
+                            ("Earnings", $includeEarnings),
+                            ("Analyst downgrades", $includeDowngrades),
+                            ("M&A / filings", $includeMAndA)
+                        ]
+                    )
+                }
+            }
+        }
+    }
+
+    private var deliverySection: some View {
+        SectionCard(title: "Delivery", subtitle: "Where to send alerts", icon: "paperplane") {
+            VStack(spacing: 12) {
+                DeliveryRow(title: "Push Notifications", isOn: $deliveryPush)
+                DeliveryRow(title: "In‑app Banner", isOn: $deliveryInApp)
+                DeliveryRow(title: "Email", isOn: $deliveryEmail)
+            }
+        }
+    }
+
+    private var footerNote: some View {
+        Text("You can adjust these later from Watchlist → Alerts.")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(themeTextSecondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 6)
+    }
+
+    // MARK: - Bottom Action Bar
+    private var actionBar: some View {
+        HStack(spacing: 12) {
+            Button(action: { dismiss() }) {
+                Text("Cancel")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(themeTextPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(themeCard)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeBorder, lineWidth: 0.6))
+            }
+            Button(action: saveSettings) {
+                HStack(spacing: 8) {
+                    Image(systemName: isSaving ? "hourglass" : "checkmark")
+                    Text(isSaving ? "Saving…" : "Save")
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
+                .cornerRadius(12)
+                .shadow(color: .blue.opacity(0.18), radius: 12, x: 0, y: 6)
+            }
+            .disabled(isSaving)
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Toast
+    private var savedToast: some View {
+        Group {
+            if showSavedToast {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(.white)
+                    Text("Saved")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(12)
+                .padding(.bottom, 80)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showSavedToast)
+    }
+
+    // MARK: - Save
+    private func saveSettings() {
+        guard !isSaving else { return }
+        let symbol = item.symbol
+        isSaving = true
+
+        // Persist price alert to backend
+        if priceAlertsEnabled {
+            if let above = Double(targetAbove) {
+                watchlistVM.setAlert(for: symbol, price: above, type: "above")
+            } else if let below = Double(targetBelow) {
+                watchlistVM.setAlert(for: symbol, price: below, type: "below")
+            } else {
+                // If enabled but no value, just enable alerts flag
+                watchlistVM.updateWatchlistItem(symbol: symbol, alertsEnabled: true)
+            }
+        } else {
+            watchlistVM.updateWatchlistItem(symbol: symbol, alertsEnabled: false)
+        }
+
+        // Save local-only preferences
+        UserDefaults.standard.set(sentimentAlertsEnabled, forKey: "alerts.sentiment.enabled.\(symbol)")
+        UserDefaults.standard.set(sentimentThreshold, forKey: "alerts.sentiment.threshold.\(symbol)")
+        UserDefaults.standard.set(newsAlertsEnabled, forKey: "alerts.news.enabled.\(symbol)")
+        UserDefaults.standard.set(includeEarnings, forKey: "alerts.news.earnings.\(symbol)")
+        UserDefaults.standard.set(includeDowngrades, forKey: "alerts.news.downgrades.\(symbol)")
+        UserDefaults.standard.set(includeMAndA, forKey: "alerts.news.mna.\(symbol)")
+        UserDefaults.standard.set(deliveryPush, forKey: "alerts.delivery.push.\(symbol)")
+        UserDefaults.standard.set(deliveryInApp, forKey: "alerts.delivery.inapp.\(symbol)")
+        UserDefaults.standard.set(deliveryEmail, forKey: "alerts.delivery.email.\(symbol)")
+
+        // UX feedback
+        let h = UINotificationFeedbackGenerator()
+        h.notificationOccurred(.success)
+        showSavedToast = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation { showSavedToast = false }
+            isSaving = false
+            dismiss()
+        }
+    }
+
+    // MARK: - Background
+
+    private var backgroundDecor: some View {
+        ZStack {
+            themeBackground
+            RadialGradient(colors: [themeAccent.opacity(0.10), .clear], center: .topTrailing, startRadius: 10, endRadius: 400)
+            RadialGradient(colors: [.purple.opacity(0.10), .clear], center: .bottomLeading, startRadius: 10, endRadius: 420)
+        }
+    }
+
+    // MARK: - Subviews
+    private var themeBackground: Color { themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background }
+    private var themeCard: Color { themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground }
+    private var themeBorder: Color { themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border }
+    private var themeTextPrimary: Color { themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText }
+    private var themeTextSecondary: Color { themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText }
+    private var themeAccent: Color { themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary }
+}
+
+// MARK: - SectionCard
+private struct SectionCard<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let content: Content
+    @StateObject private var themeManager = ThemeManager.shared
+    init(title: String, subtitle: String, icon: String, @ViewBuilder content: () -> Content) {
+        self.title = title; self.subtitle = subtitle; self.icon = icon; self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(themeAccent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.system(size: 16, weight: .semibold)).foregroundColor(themeTextPrimary)
+                    Text(subtitle).font(.system(size: 13, weight: .medium)).foregroundColor(themeTextSecondary)
+                }
+                Spacer()
+            }
+            content
+        }
+        .padding(16)
+        .background(themeCard)
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(themeBorder, lineWidth: 0.5))
+    }
+    private var themeCard: Color { themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground }
+    private var themeBorder: Color { themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border }
+    private var themeTextPrimary: Color { themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText }
+    private var themeTextSecondary: Color { themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText }
+    private var themeAccent: Color { themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary }
+}
+
+private struct ToggleRow: View {
+    @Binding var isOn: Bool
+    var body: some View {
+        HStack {
+            Text(isOn ? "Enabled" : "Disabled")
+                .font(.system(size: 13, weight: .semibold))
+            Spacer()
+            Toggle("", isOn: $isOn).labelsHidden()
+        }
+    }
+}
+
+private struct LabeledField: View {
+    let label: String
+    @Binding var text: String
+    var prefix: String? = nil
+    var step: Double? = nil
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(.system(size: 12, weight: .medium)).foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            HStack(spacing: 8) {
+                if let prefix = prefix { Text(prefix).font(.system(size: 14, weight: .semibold)).foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText) }
+                TextField("0.00", text: $text)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 14, weight: .semibold))
+                if let step = step {
+                    Stepper("") {
+                        let value = (Double(text) ?? 0) + step
+                        text = String(format: "%.2f", value)
+                    } onDecrement: {
+                        let value = (Double(text) ?? 0) - step
+                        text = String(format: "%.2f", max(0, value))
+                    }
+                    .labelsHidden()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+            .cornerRadius(10)
+        }
+    }
+}
+
+private struct FilterPillRow: View {
+    let items: [(String, Binding<Bool>)]
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, pair in
+                let (label, binding) = pair
+                Button(action: { binding.wrappedValue.toggle() }) {
+                    Text(label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(binding.wrappedValue ? .white : themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(binding.wrappedValue ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.12))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// Tabs removed per design simplification
+
+private struct DeliveryRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            Spacer()
+            Toggle("", isOn: $isOn).labelsHidden()
+        }
+    }
+}
+
 //
 //  ModernWatchlistView.swift
 //  ChartSense
@@ -14,6 +408,7 @@ struct ModernWatchlistView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var showingAddStock = false
     @State private var searchText = ""
+    @State private var presentingAlerts: AlertsPair? = nil
     
 
     
@@ -61,7 +456,10 @@ struct ModernWatchlistView: View {
                             viewModel.removeFromWatchlist(item)
                         },
                         onToggleAlerts: { symbol in
-                            viewModel.toggleAlerts(for: symbol)
+                            if let pair = viewModel.watchlistItemsWithStock.first(where: { $0.watchlistItem.symbol == symbol }),
+                               let stock = pair.stock {
+                                presentingAlerts = AlertsPair(item: pair.watchlistItem, stock: stock)
+                            }
                         }
                     )
                 }
@@ -76,6 +474,27 @@ struct ModernWatchlistView: View {
                 print("✅ WATCHLIST SHEET: addToWatchlist call completed")
             }
         }
+        .sheet(item: $presentingAlerts, content: { pair in
+            AlertsSheet(item: pair.item, stock: pair.stock)
+        })
+    }
+}
+
+// Helper Identifiable pair for sheet
+fileprivate struct AlertsPair: Identifiable {
+    let id = UUID()
+    let item: WatchlistItem
+    let stock: Stock
+}
+
+// MARK: - Alerts Sheet Launcher
+enum AlertsSheetLauncher {
+    static func present(item: WatchlistItem, stock: Stock) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PresentAlertsSheet"),
+            object: nil,
+            userInfo: ["item": item.symbol]
+        )
     }
 }
 
@@ -337,10 +756,7 @@ struct ModernWatchlistCard: View {
     @State private var showDeleteConfirm = false
     
     var body: some View {
-        Button(action: {
-            if let stock = stock { onSelect(stock) }
-        }) {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
                 // Top row
                 HStack(spacing: 22) {
                     // Left: Symbol/Name
@@ -402,19 +818,18 @@ struct ModernWatchlistCard: View {
                         }
                         .layoutPriority(2)
                         VStack(spacing: 8) {
+                            // Open a rich Alerts sheet instead of toggling
                             Button(action: {
                                 let generator = UIImpactFeedbackGenerator(style: .light)
                                 generator.impactOccurred()
                                 onToggleAlerts()
                             }) {
-                                Image(systemName: item.alertsEnabled ? "bell.fill" : "bell")
+                                Image(systemName: "bell")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText))
+                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                                     .frame(width: 30, height: 30)
                                     .background(
-                                        Circle().fill(
-                                            item.alertsEnabled ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15) : (themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                                        )
+                                        Circle().fill((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15))
                                     )
                             }
                             .buttonStyle(.plain)
@@ -530,20 +945,11 @@ struct ModernWatchlistCard: View {
             .shadow(color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.07), radius: 18, x: 0, y: 14)
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.12), value: isPressed)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                let gen = UINotificationFeedbackGenerator()
-                gen.notificationOccurred(.success)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                    onRemove()
-                }
-            } label: {
-                Label("Delete", systemImage: "trash")
+            .contentShape(RoundedRectangle(cornerRadius: 24))
+            .onTapGesture {
+                if let stock = stock { onSelect(stock) }
             }
         }
-    }
     
     private func sentimentColor(_ sentiment: SentimentAnalysis) -> Color {
         switch sentiment.overallRating {
