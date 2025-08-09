@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Charts
 import UIKit
 
 // MARK: - Haptics
@@ -19,487 +18,26 @@ enum Haptics {
     }
 }
 
-// MARK: - Professional Chart Components
-struct ProfessionalChartView: View {
-    let stock: Stock
-    @Binding var selectedTimeframe: TimeFrame
-    @Binding var selectedPoint: ChartPoint?
-    @State private var chartData: [ChartPoint] = []
-    @State private var isLoading = false
-    @State private var showCursor = false
-    @State private var dragLocation: CGPoint = .zero
-    @StateObject private var themeManager = ThemeManager.shared
-    // Unique interaction toggles
-    @State private var showLens = true
-    @State private var showRibbon = true
-    @State private var showLevels = true
-    @State private var isPlaying = false
-    @State private var playIndex: Int = 0
-    @State private var playTimer: Timer? = nil
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Chart Area
-            GeometryReader { geometry in
-                ZStack {
-                    if isLoading {
-                        ChartLoadingView()
-                    } else {
-                        UltraCleanChart(
-                            data: chartData,
-                            timeframe: selectedTimeframe,
-                            selectedPoint: $selectedPoint,
-                            showCursor: $showCursor,
-                            geometry: geometry,
-                            stock: stock
-                        )
-                    }
-                }
-                // Gestures managed inside UltraCleanChart
-            }
-            .frame(height: 360)
-            
-            // Timeframe controls — single row, minimal
-            ChartControlsView(timeframe: $selectedTimeframe)
-                .onChange(of: selectedTimeframe) { newTimeframe in
-                    loadChartData(for: newTimeframe)
-                    selectedPoint = nil
-                    showCursor = false
-                }
-        }
-        .onAppear {
-            loadChartData(for: selectedTimeframe)
-        }
-        .onChange(of: isPlaying) { playing in
-            if playing { startPlayback() } else { stopPlayback() }
-        }
-    }
-    
-    private func startPlayback() {
-        stopPlayback()
-        guard !chartData.isEmpty else { return }
-        playIndex = 0
-        showCursor = true
-        playTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { _ in
-            if playIndex >= chartData.count { stopPlayback(); return }
-            selectedPoint = chartData[playIndex]
-            playIndex += 1
-        }
-    }
-    
-    private func stopPlayback() {
-        playTimer?.invalidate()
-        playTimer = nil
-    }
-    
-    private func loadChartData(for timeframe: TimeFrame) {
-        isLoading = true
-        
-        print("📊 Loading chart data for \(stock.symbol) - Current price: \(stock.currentPrice)")
-        
-        Task {
-            do {
-                // First try to get historical data from database
-                let historicalData = try await fetchHistoricalData(symbol: stock.symbol, timeframe: timeframe)
-                
-                if !historicalData.isEmpty {
-                    print("✅ Found historical data for \(stock.symbol): \(historicalData.count) points")
-                    chartData = historicalData
-                } else {
-                    // Fallback to generating data from current stock info
-                    print("⚠️ No historical data found, generating from current price")
-                    chartData = generateChartDataFromCurrentStock(timeframe: timeframe)
-                }
-                
-                await MainActor.run {
-                    isLoading = false
-                }
-            } catch {
-                print("❌ Error loading chart data: \(error)")
-                // Fallback to mock data if everything fails
-                chartData = generateMockChartData(for: timeframe)
-                await MainActor.run {
-                    isLoading = false
-                }
-            }
-        }
-    }
-    
-    private func fetchHistoricalData(symbol: String, timeframe: TimeFrame) async throws -> [ChartPoint] {
-        // This would fetch real historical data from your database
-        // For now, we'll generate realistic data based on the current stock
-        return generateChartDataFromCurrentStock(timeframe: timeframe)
-    }
-    
-    private func generateChartDataFromCurrentStock(timeframe: TimeFrame) -> [ChartPoint] {
-        let basePrice = stock.currentPrice
-        print("🔧 Generating chart data for \(stock.symbol) with base price: \(basePrice)")
-        
-        // If base price is 0 or invalid, use a default
-        let validBasePrice = basePrice > 0 ? basePrice : 150.0
-        print("🔧 Using valid base price: \(validBasePrice)")
-        
-        let count: Int
-        let interval: TimeInterval
-        
-        switch timeframe {
-        case .oneDay:
-            count = 100
-            interval = 240 // 4 minutes
-        case .oneWeek:
-            count = 50
-            interval = 7200 // 2 hours
-        case .oneMonth:
-            count = 30
-            interval = 86400 // 1 day
-        case .threeMonths:
-            count = 20
-            interval = 604800 // 1 week
-        case .oneYear:
-            count = 12
-            interval = 2592000 // 1 month
-        }
-        
-        var data: [ChartPoint] = []
-        var currentPrice = validBasePrice * 0.95 // Start slightly lower
-        
-        for i in 0..<count {
-            let date = Date().addingTimeInterval(-interval * Double(count - i))
-            
-            // Create realistic price movement
-            let progress = Double(i) / Double(count)
-            let trend = progress * 0.1 // 10% overall trend
-            let volatility = 0.02 // 2% volatility
-            let randomChange = Double.random(in: -volatility...volatility)
-            
-            currentPrice = currentPrice * (1 + trend/Double(count) + randomChange)
-            
-            // Ensure the last point is the current price
-            if i == count - 1 {
-                currentPrice = validBasePrice
-            }
-            
-            data.append(ChartPoint(date: date, price: max(currentPrice, validBasePrice * 0.8)))
-        }
-        
-        print("📈 Generated \(data.count) chart points for \(stock.symbol), price range: \(data.map(\.price).min() ?? 0) - \(data.map(\.price).max() ?? 0)")
-        return data
-    }
-    
+// MARK: - Charts were removed per request
 
-    
-    private func generateMockChartData(for timeframe: TimeFrame) -> [ChartPoint] {
-        let basePrice = stock.currentPrice
-        print("🎲 Generating mock chart data for \(stock.symbol) with base price: \(basePrice)")
-        
-        // If base price is 0 or invalid, use a default
-        let validBasePrice = basePrice > 0 ? basePrice : 150.0
-        print("🎲 Using valid base price for mock: \(validBasePrice)")
-        
-        let count: Int
-        let interval: TimeInterval
-        
-        switch timeframe {
-        case .oneDay:
-            count = 100
-            interval = 240 // 4 minutes
-        case .oneWeek:
-            count = 50
-            interval = 7200 // 2 hours
-        case .oneMonth:
-            count = 30
-            interval = 86400 // 1 day
-        case .threeMonths:
-            count = 20
-            interval = 604800 // 1 week
-        case .oneYear:
-            count = 12
-            interval = 2592000 // 1 month
-        }
-        
-        var data: [ChartPoint] = []
-        var currentPrice = validBasePrice * 0.95
-        
-        for i in 0..<count {
-            let date = Date().addingTimeInterval(-interval * Double(count - i))
-            let trend = Double(i) / Double(count) * 0.08
-            let volatility = 0.005
-            let randomChange = Double.random(in: -volatility...volatility)
-            
-            currentPrice = currentPrice * (1 + trend/Double(count) + randomChange)
-            
-            if i == count - 1 {
-                currentPrice = validBasePrice
-            }
-            
-            data.append(ChartPoint(date: date, price: max(currentPrice, validBasePrice * 0.8)))
-        }
-        
-        print("🎲 Generated \(data.count) mock chart points for \(stock.symbol), price range: \(data.map(\.price).min() ?? 0) - \(data.map(\.price).max() ?? 0)")
-        return data
-    }
-    
-    private func updateSelectedPoint(at location: CGPoint, in geometry: GeometryProxy) {
-        guard !chartData.isEmpty else { return }
-        
-        let normalizedX = max(0, min(1, location.x / geometry.size.width))
-        let index = Int(normalizedX * CGFloat(chartData.count - 1))
-        let clampedIndex = max(0, min(chartData.count - 1, index))
-        
-        selectedPoint = chartData[clampedIndex]
-    }
-}
-
-// MARK: - Key Levels Overlay
-private struct KeyLevelsOverlay: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        let minP = data.map(\.price).min() ?? 0
-        let maxP = data.map(\.price).max() ?? 1
-        let mid = (minP + maxP) / 2
-        
-        return ZStack {
-            LevelLine(value: maxP, color: .gray.opacity(0.25), label: "High")
-            LevelLine(value: mid, color: .blue.opacity(0.18), label: "Pivot")
-            LevelLine(value: minP, color: .gray.opacity(0.25), label: "Low")
-        }
-        .allowsHitTesting(false)
-    }
-    
-    private func y(for value: Double) -> CGFloat {
-        let minP = data.map(\.price).min() ?? 0
-        let maxP = data.map(\.price).max() ?? 1
-        guard maxP != minP else { return geometry.size.height / 2 }
-        return (1 - CGFloat((value - minP) / (maxP - minP))) * geometry.size.height
-    }
-    
-    private func LevelLine(value: Double, color: Color, label: String) -> some View {
-        let yPos = y(for: value)
-        return AnyView(
-            ZStack(alignment: .leading) {
-                Rectangle()
-                    .fill(color)
-                    .frame(height: 0.75)
-                    .position(x: geometry.size.width / 2, y: yPos)
-                Text("\(label)  \(String(format: "$%.2f", value))")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background((themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground).opacity(0.6))
-                    .cornerRadius(6)
-                    .position(x: 56, y: max(12, min(geometry.size.height - 12, yPos - 10)))
-            }
-        )
-    }
-}
+// (removed: KeyLevelsOverlay)
 
 // MARK: - Trend Ribbon
-private struct TrendRibbon: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    
-    var body: some View {
-        let prices = data.map(\.price)
-        let moving = movingAverage(prices, period: 8)
-        let baseline = moving.last ?? (prices.last ?? 0)
-        let last = prices.last ?? 0
-        let pct = baseline == 0 ? 0 : ((last - baseline) / baseline)
-        let color = pct >= 0 ? Color.green.opacity(0.18) : Color.red.opacity(0.18)
-        
-        return Rectangle()
-            .fill(color)
-            .frame(height: 10)
-    }
-    
-    private func movingAverage(_ arr: [Double], period: Int) -> [Double] {
-        guard period > 0, arr.count >= period else { return arr }
-        var result: [Double] = []
-        var sum: Double = 0
-        for i in 0..<arr.count {
-            sum += arr[i]
-            if i >= period { sum -= arr[i - period] }
-            if i >= period - 1 { result.append(sum / Double(period)) }
-        }
-        return result
-    }
-}
+// (removed: TrendRibbon)
 
 // MARK: - Insight Banner
-private struct InsightBanner: View {
-    let data: [ChartPoint]
-    let point: ChartPoint
-    
-    var body: some View {
-        let text = insightText()
-        return Group {
-            if let text = text {
-                Text(text)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.28))
-                    .cornerRadius(8)
-            }
-        }
-    }
-    
-    private func insightText() -> String? {
-        guard let first = data.first, let last = data.last else { return nil }
-        let p = point.price
-        let range = (data.map(\.price).min() ?? p, data.map(\.price).max() ?? p)
-        if p == range.1 { return "New intraperiod high" }
-        if p == range.0 { return "New intraperiod low" }
-        let mid = (range.0 + range.1) / 2
-        if abs(p - mid) / mid < 0.01 { return "At pivot region" }
-        // momentum check
-        let idx = data.firstIndex { $0.id == point.id } ?? (data.count - 1)
-        let windowStart = max(0, idx - 5)
-        let momentum = p - data[windowStart].price
-        if abs(momentum) / p > 0.015 { return momentum > 0 ? "Strong short-term momentum" : "Weak short-term momentum" }
-        // end of series improvement
-        if point.id == last.id { return "Latest tick" }
-        return nil
-    }
-}
+// (removed: InsightBanner)
 
 // MARK: - Chart Toolbar
-private struct ChartToolbar: View {
-    @Binding var showLens: Bool
-    @Binding var showRibbon: Bool
-    @Binding var showLevels: Bool
-    @Binding var isPlaying: Bool
-    let onPlay: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            ToolbarPill(icon: showLens ? "scope" : "scope", active: showLens) { showLens.toggle() }
-            ToolbarPill(icon: "waveform.path", active: showRibbon) { showRibbon.toggle() }
-            ToolbarPill(icon: "line.3.horizontal.decrease", active: showLevels) { showLevels.toggle() }
-            ToolbarPill(icon: isPlaying ? "pause.fill" : "play.fill", active: true) { onPlay() }
-        }
-    }
-}
+// (removed: ChartToolbar)
 
-private struct ToolbarPill: View {
-    let icon: String
-    let active: Bool
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(active ? .white : .gray)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    active
-                    ? AnyShapeStyle(LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing))
-                    : AnyShapeStyle(Color.black.opacity(0.12))
-                )
-                .cornerRadius(14)
-        }
-        .buttonStyle(.plain)
-    }
-}
+// (removed: ToolbarPill)
 
 // MARK: - Robinhood Style Chart
-struct RobinhoodStyleChart: View {
-    let data: [ChartPoint]
-    @Binding var selectedPoint: ChartPoint?
-    @Binding var showCursor: Bool
-    @Binding var dragLocation: CGPoint
-    let geometry: GeometryProxy
-    let timeframe: TimeFrame
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        ZStack {
-            // Chart Background
-            (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-                .ignoresSafeArea()
-            if !data.isEmpty {
-                // Fill Area with Gradient
-                ChartFillArea(data: data, geometry: geometry)
-                
-                // Chart Line
-                ChartLine(data: data, geometry: geometry)
-                
-                // Grid Lines and session shading
-                ChartGridLines(data: data, geometry: geometry)
-                SessionBackground(geometry: geometry, timeframe: timeframe, data: data)
-            }
-        }
-    }
-}
+// (removed: RobinhoodStyleChart)
 
 // MARK: - UltraCleanChart (all-in-one, glitch-free)
-private struct UltraCleanChart: View {
-    let data: [ChartPoint]
-    let timeframe: TimeFrame
-    @Binding var selectedPoint: ChartPoint?
-    @Binding var showCursor: Bool
-    let geometry: GeometryProxy
-    let stock: Stock
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        ZStack {
-            // Base layers
-            RobinhoodStyleChart(
-                data: data,
-                selectedPoint: $selectedPoint,
-                showCursor: $showCursor,
-                dragLocation: .constant(.zero),
-                geometry: geometry,
-                timeframe: timeframe
-            )
-            .drawingGroup()
-            
-            // HUD (price, session, time)
-            ChartHUD(stock: stock, point: selectedPoint, timeframe: timeframe, data: data)
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .frame(maxWidth: geometry.size.width, maxHeight: geometry.size.height, alignment: .topLeading)
-            
-            // Cursor + Tooltip when active
-            if showCursor, let sp = selectedPoint {
-                ChartCursor(point: sp, geometry: geometry, data: data)
-                ChartTooltip(point: sp, geometry: geometry, data: data)
-            }
-        }
-        .contentShape(Rectangle())
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    showCursor = true
-                    updateSelectedPoint(at: value.location)
-                }
-                .onEnded { _ in
-                    // keep the cursor
-                }
-        )
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showCursor.toggle()
-                    if !showCursor { selectedPoint = nil }
-                }
-            }
-        )
-    }
-    
-    private func updateSelectedPoint(at location: CGPoint) {
-        guard !data.isEmpty else { return }
-        let normalizedX = max(0, min(1, location.x / geometry.size.width))
-        let index = Int(normalizedX * CGFloat(max(1, data.count - 1)))
-        selectedPoint = data[index]
-    }
-}
+// (removed: UltraCleanChart)
 
 // MARK: - Animated Gradient Sweep
 private struct AnimatedSweep: View {
@@ -525,528 +63,41 @@ private struct AnimatedSweep: View {
 }
 
 // MARK: - Chart Fill Area
-struct ChartFillArea: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        Path { path in
-            let points = data.enumerated().map { index, point in
-                CGPoint(
-                    x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
-                    y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-                )
-            }
-            
-            path.move(to: CGPoint(x: points[0].x, y: geometry.size.height))
-            path.addLine(to: points[0])
-            for point in points.dropFirst() {
-                path.addLine(to: point)
-            }
-            path.addLine(to: CGPoint(x: points.last!.x, y: geometry.size.height))
-            path.closeSubpath()
-        }
-        .fill(
-            LinearGradient(
-                colors: [
-                    Color.blue.opacity(0.22),
-                    Color.blue.opacity(0.06),
-                    Color.blue.opacity(0.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-    
-    private var minPrice: Double {
-        data.map(\.price).min() ?? 0
-    }
-    
-    private var maxPrice: Double {
-        data.map(\.price).max() ?? 1
-    }
-}
+// (removed: ChartFillArea)
 
 // MARK: - Chart Line
-struct ChartLine: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    
-    var body: some View {
-        Path { path in
-            let points = data.enumerated().map { index, point in
-                CGPoint(
-                    x: CGFloat(index) / CGFloat(data.count - 1) * geometry.size.width,
-                    y: (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-                )
-            }
-            guard !points.isEmpty else { return }
-            path.move(to: points[0])
-            for i in 1..<points.count {
-                let prev = points[i - 1]
-                let current = points[i]
-                let mid = CGPoint(x: (prev.x + current.x) / 2, y: (prev.y + current.y) / 2)
-                if i == 1 {
-                    path.addQuadCurve(to: mid, control: controlPoint(p1: prev, p2: current))
-                } else {
-                    let prevMid = CGPoint(x: (points[i - 2].x + prev.x) / 2, y: (points[i - 2].y + prev.y) / 2)
-                    path.addCurve(to: mid, control1: controlPoint(p1: prevMid, p2: prev), control2: controlPoint(p1: prev, p2: current))
-                }
-            }
-            if let last = points.last {
-                path.addLine(to: last)
-            }
-        }
-        .stroke(
-            LinearGradient(colors: [Color.blue, Color.blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing),
-            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-        )
-    }
-    
-    private var minPrice: Double {
-        data.map(\.price).min() ?? 0
-    }
-    
-    private var maxPrice: Double {
-        data.map(\.price).max() ?? 1
-    }
-
-    private func controlPoint(p1: CGPoint, p2: CGPoint) -> CGPoint {
-        let smoothing: CGFloat = 0.2
-        return CGPoint(x: p1.x + (p2.x - p1.x) * smoothing, y: p1.y + (p2.y - p1.y) * smoothing)
-    }
-}
+// (removed: ChartLine)
 
 // MARK: - Chart Grid Lines
-struct ChartGridLines: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        ZStack {
-            // Horizontal grid lines (very subtle)
-            ForEach(0..<3, id: \.self) { i in
-                let y = geometry.size.height * CGFloat(i + 1) / 4
-                Rectangle()
-                    .fill((themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border).opacity(0.25))
-                    .frame(height: 0.5)
-                    .position(x: geometry.size.width / 2, y: y)
-            }
-        }
-    }
-}
+// (removed: ChartGridLines)
 
 // MARK: - Session Background (pre/regular/after hours)
-struct SessionBackground: View {
-    let geometry: GeometryProxy
-    let timeframe: TimeFrame
-    let data: [ChartPoint]
-    @StateObject private var themeManager = ThemeManager.shared
-
-    var body: some View {
-        guard timeframe == .oneDay, let first = data.first, let last = data.last else { return AnyView(EmptyView()) } 
-        let start = first.date
-        let end = last.date
-        guard end > start else { return AnyView(EmptyView()) }
-
-        // Define session boundaries (approx, local timezone)
-        let calendar = Calendar.current
-        let day = calendar.startOfDay(for: end)
-        let preStart = calendar.date(bySettingHour: 4, minute: 0, second: 0, of: day) ?? start
-        let marketOpen = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: day) ?? start
-        let marketClose = calendar.date(bySettingHour: 16, minute: 0, second: 0, of: day) ?? end
-        let afterEnd = calendar.date(bySettingHour: 20, minute: 0, second: 0, of: day) ?? end
-
-        // Helper to map a date to X position
-        func x(_ date: Date) -> CGFloat {
-            let clamped = min(max(date.timeIntervalSince1970, start.timeIntervalSince1970), end.timeIntervalSince1970)
-            let p = (clamped - start.timeIntervalSince1970) / (end.timeIntervalSince1970 - start.timeIntervalSince1970)
-            return CGFloat(p) * geometry.size.width
-        }
-
-        let overlay = (themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
-
-        return AnyView(
-            ZStack {
-                // Pre-market shade
-                if marketOpen > start {
-                    Rectangle()
-                        .fill(overlay.opacity(0.16))
-                        .frame(width: max(0, x(marketOpen) - x(preStart)), height: geometry.size.height)
-                        .position(x: (x(marketOpen) + x(preStart)) / 2, y: geometry.size.height / 2)
-                }
-                // After-hours shade
-                if end > marketClose {
-                    Rectangle()
-                        .fill(overlay.opacity(0.16))
-                        .frame(width: max(0, x(min(afterEnd, end)) - x(marketClose)), height: geometry.size.height)
-                        .position(x: (x(min(afterEnd, end)) + x(marketClose)) / 2, y: geometry.size.height / 2)
-                }
-                // Session boundary markers (very subtle)
-            Rectangle()
-                .fill(overlay.opacity(0.25))
-                    .frame(width: 0.5, height: geometry.size.height)
-                    .position(x: x(marketOpen), y: geometry.size.height / 2)
-            Rectangle()
-                .fill(overlay.opacity(0.25))
-                    .frame(width: 0.5, height: geometry.size.height)
-                    .position(x: x(marketClose), y: geometry.size.height / 2)
-            }
-        )
-    }
-}
+// (removed: SessionBackground)
 
 // MARK: - Minimal Chart HUD (non-intrusive)
-struct ChartHUD: View {
-    let stock: Stock
-    let point: ChartPoint?
-    let timeframe: TimeFrame
-    let data: [ChartPoint]
-    @StateObject private var themeManager = ThemeManager.shared
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Price
-            let priceText = point?.formattedPrice ?? stock.formattedPrice
-            CapsuleLabel(text: priceText)
-            
-            // Time (only when we have a point)
-            if let p = point {
-                CapsuleSubtle(text: timeText(for: p))
-            }
-            
-            // Session label
-            if let label = sessionLabel {
-                CapsuleSubtle(text: label)
-            }
-            
-            // Change since first visible point (when crosshair active)
-            // Keep hidden by default for minimalism
-        }
-    }
-
-    private var sessionLabel: String? {
-        guard timeframe == .oneDay, let ref = (point ?? data.last) else { return nil }
-        let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: ref.date)
-        switch hour {
-        case 4..<9: return "Pre-Market"
-        case 9..<16: return "Market Hours"
-        case 16..<20: return "After Hours"
-        default: return nil
-        }
-    }
-
-    private func timeText(for point: ChartPoint) -> String {
-        if timeframe == .oneDay { return point.formattedTime }
-        return point.formattedDateOnly
-    }
-    
-    private var changeFromStart: (value: Double, percent: Double)? {
-        guard let start = data.first, let ref = point else { return nil }
-        guard start.price != 0 else { return nil }
-        let value = ref.price - start.price
-        let percent = (value / start.price) * 100
-        return (value, percent)
-    }
-}
+// (removed: ChartHUD)
 
 // MARK: - HUD Capsule Styles
-private struct CapsuleLabel: View {
-    let text: String
-    @StateObject private var themeManager = ThemeManager.shared
-    var body: some View {
-        Text(text)
-            .font(.system(size: 14, weight: .bold, design: .monospaced))
-            .foregroundStyle(LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill((themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground).opacity(0.7))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke((themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border).opacity(0.6), lineWidth: 0.75)
-                    )
-            )
-    }
-}
+// (removed: CapsuleLabel)
 
-private struct CapsuleSubtle: View {
-    let text: String
-    @StateObject private var themeManager = ThemeManager.shared
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background((themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground).opacity(0.5))
-            .cornerRadius(8)
-    }
-}
+// (removed: CapsuleSubtle)
 
-private struct CapsuleDelta: View {
-    let change: Double
-    let percent: Double
-    var body: some View {
-        let isUp = change >= 0
-        HStack(spacing: 4) {
-            Image(systemName: isUp ? "arrow.up.right" : "arrow.down.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(isUp ? Color.bullish : Color.bearish)
-            Text(String(format: "%@%.2f (%.2f%%)", isUp ? "+" : "-", abs(change), abs(percent)))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(isUp ? Color.bullish : Color.bearish)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background((isUp ? Color.green.opacity(0.12) : Color.red.opacity(0.12)))
-        .cornerRadius(8)
-    }
-}
+// (removed: CapsuleDelta)
 
 // MARK: - Chart Cursor
-struct ChartCursor: View {
-    let point: ChartPoint
-    let geometry: GeometryProxy
-    let data: [ChartPoint]
-    
-    var body: some View {
-        ZStack {
-            // Vertical line
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(width: 1)
-                .position(x: cursorX, y: geometry.size.height / 2)
-            
-            // Price dot
-            Circle()
-                .fill(Color.blue)
-                .frame(width: 8, height: 8)
-                .overlay(
-                    Circle().stroke(Color.white, lineWidth: 2)
-                )
-                .position(x: cursorX, y: cursorY)
-        }
-    }
-    
-    private var cursorX: CGFloat {
-        guard let index = data.firstIndex(where: { $0.date == point.date && $0.price == point.price }) else {
-            return 0
-        }
-        let progress = CGFloat(index) / CGFloat(max(1, data.count - 1))
-        return progress * geometry.size.width
-    }
-    
-    private var cursorY: CGFloat {
-        guard !data.isEmpty else { return geometry.size.height / 2 }
-        let minPrice = data.map(\.price).min() ?? point.price
-        let maxPrice = data.map(\.price).max() ?? point.price
-        guard maxPrice != minPrice else { return geometry.size.height / 2 }
-        return (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-    }
-}
+// (removed: ChartCursor)
 
 // MARK: - Chart Tooltip
-struct ChartTooltip: View {
-    let point: ChartPoint
-    let geometry: GeometryProxy
-    let data: [ChartPoint]
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        let x = cursorX
-        let y = cursorY
-        
-        // Minimal price tag that hugs the dot (no date text to reduce clutter)
-        Text(point.formattedPrice)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule().fill(
-                    LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing)
-                )
-            )
-            .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
-            .opacity(0.98)
-            .position(x: min(max(30, x), geometry.size.width - 30), y: max(16, y - 18))
-        
-        // Bottom readout removed for ultra-clean
-    }
-    
-    private var cursorX: CGFloat {
-        guard let index = data.firstIndex(where: { $0.date == point.date && $0.price == point.price }) else {
-            return 0
-        }
-        let progress = CGFloat(index) / CGFloat(max(1, data.count - 1))
-        return progress * geometry.size.width
-    }
-    
-    private var cursorY: CGFloat {
-        guard !data.isEmpty else { return geometry.size.height / 2 }
-        let minPrice = data.map(\.price).min() ?? point.price
-        let maxPrice = data.map(\.price).max() ?? point.price
-        guard maxPrice != minPrice else { return geometry.size.height / 2 }
-        return (1 - CGFloat((point.price - minPrice) / (maxPrice - minPrice))) * geometry.size.height
-    }
-}
+// (removed: ChartTooltip)
 
 // MARK: - Chart Magnifier (overlay zoom window)
-private struct ChartMagnifier: View {
-    let data: [ChartPoint]
-    let geometry: GeometryProxy
-    let location: CGPoint
-    
-    var body: some View {
-        let width: CGFloat = 96
-        let height: CGFloat = 64
-        let normalizedX = max(0, min(1, location.x / geometry.size.width))
-        let centerIndex = Int(normalizedX * CGFloat(max(1, data.count - 1)))
-        let lower = max(0, centerIndex - 12)
-        let upper = min(data.count - 1, centerIndex + 12)
-        let window = Array(data[lower...upper])
-        
-        return VStack(alignment: .trailing, spacing: 6) {
-            Canvas { context, size in
-                guard window.count > 1 else { return }
-                let minP = window.map { $0.price }.min() ?? 0
-                let maxP = window.map { $0.price }.max() ?? 1
-                var path = Path()
-                for (i, pt) in window.enumerated() {
-                    let x = CGFloat(i) / CGFloat(window.count - 1) * size.width
-                    let y = (1 - CGFloat((pt.price - minP) / (maxP - minP))) * size.height
-                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
-                }
-                context.stroke(path, with: .color(.blue), lineWidth: 2)
-            }
-            .frame(width: width, height: height)
-            .background(.thinMaterial)
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.6), lineWidth: 0.5)
-            )
-            
-            HStack(spacing: 8) {
-                Text("x: \(Int(location.x))")
-                    .font(.system(size: 10, weight: .medium))
-                Text("y: \(Int(location.y))")
-                    .font(.system(size: 10, weight: .medium))
-            }
-            .foregroundColor(.white)
-        }
-    }
-}
+// (removed: ChartMagnifier)
 
 // MARK: - Chart Controls
-struct ChartControlsView: View {
-    @Binding var timeframe: TimeFrame
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(TimeFrame.allCases, id: \.self) { tf in
-                Button(action: {
-                    if timeframe != tf {
-                        timeframe = tf
-                        Haptics.light()
-                    }
-                }) {
-                    Text(tf.displayName)
-                        .font(.system(size: 14, weight: timeframe == tf ? .semibold : .medium))
-                        .foregroundColor(
-                            timeframe == tf 
-                            ? .white
-                            : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    timeframe == tf 
-                                    ? Color.blue
-                                    : Color.clear
-                                )
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-    }
-}
+// (removed: ChartControlsView)
 
 // MARK: - Overlaid Timeframe Control
-struct TimeframePillControl: View {
-    @Binding var timeframe: TimeFrame
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(TimeFrame.allCases, id: \.self) { tf in
-                Button(action: {
-                    if timeframe != tf {
-                        timeframe = tf
-                        Haptics.light()
-                    }
-                }) {
-                    Text(tf.displayName)
-                        .font(.system(size: 13, weight: timeframe == tf ? .semibold : .medium))
-                        .foregroundColor(foregroundColor(for: tf))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().fill(backgroundStyle(for: tf))
-                        )
-                        .overlay(
-                            Capsule().stroke(borderColor.opacity(borderOpacity(for: tf)), lineWidth: 0.75)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(6)
-        .background(
-            Capsule().fill((themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background).opacity(0.6))
-        )
-        .overlay(
-            Capsule().stroke((themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border).opacity(0.6), lineWidth: 0.75)
-        )
-        .blur(radius: 0.2)
-    }
-
-    // MARK: - Helpers (break up complex expressions)
-    private func foregroundColor(for tf: TimeFrame) -> Color {
-        if timeframe == tf { return .white }
-        return themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText
-    }
-    
-    private func backgroundStyle(for tf: TimeFrame) -> AnyShapeStyle {
-        if timeframe == tf {
-            let gradient = LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing)
-            return AnyShapeStyle(gradient)
-        } else {
-            let color = (themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground).opacity(0.7)
-            return AnyShapeStyle(color)
-        }
-    }
-    
-    private var borderColor: Color {
-        themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border
-    }
-    
-    private func borderOpacity(for tf: TimeFrame) -> Double {
-        timeframe == tf ? 0.0 : 0.6
-    }
-}
+// (removed: TimeframePillControl)
 
 // MARK: - Chart Loading View
 struct ChartLoadingView: View {
@@ -1063,6 +114,407 @@ struct ChartLoadingView: View {
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
         }
     }
+}
+
+// MARK: - Chart Range
+enum ChartRange: String, CaseIterable, Identifiable {
+    case oneDay = "1D"
+    case oneWeek = "1W"
+    case oneMonth = "1M"
+    case oneYear = "1Y"
+    case all = "All"
+    var id: String { rawValue }
+    var display: String { rawValue }
+}
+
+// MARK: - Chart Data Point
+struct ChartPoint: Identifiable, Equatable {
+    let id = UUID()
+    let date: Date
+    let price: Double
+}
+
+// MARK: - Ultra-Clean Chart Tab
+struct UltraCleanChartTab: View {
+    let stock: Stock
+    @State private var range: ChartRange = .oneDay
+    @State private var points: [ChartPoint] = []
+    @State private var isLoading: Bool = true
+    @State private var isScrubbing: Bool = false
+    @State private var scrubIndex: Int? = nil
+    @State private var crossedBaselinePreviouslyAbove: Bool? = nil
+    @State private var fadeIn: Bool = false
+    @StateObject private var themeManager = ThemeManager.shared
+
+    private var trendColor: Color { stock.dailyChange >= 0 ? Color.bullish : Color.bearish }
+    private var primaryText: Color { themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText }
+    private var secondaryText: Color { themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText }
+    private var lineColor: Color { (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary) }
+
+    private var displayPrice: Double {
+        if let i = scrubIndex, i >= 0, i < points.count { return points[i].price }
+        return points.last?.price ?? stock.currentPrice
+    }
+
+    private var baseline: Double {
+        points.first?.price ?? stock.currentPrice
+    }
+
+    private var delta: Double { displayPrice - baseline }
+    private var deltaPercent: Double { baseline == 0 ? 0 : (delta / baseline * 100.0) }
+    private var isPositiveDelta: Bool { delta >= 0 }
+
+    var body: some View {
+        VStack(spacing: 16) {
+
+            // Chart Area
+            ZStack {
+                if isLoading {
+                    // Calm skeleton
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill((themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground))
+                        .shimmer()
+                        .frame(height: 260)
+                        .padding(.horizontal, 12)
+                } else {
+                    UltraCleanChart(
+                        points: points,
+                        lineGradient: LinearGradient(
+                            colors: [
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        fillGradient: LinearGradient(
+                            colors: [
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.25),
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary).opacity(0.06)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        isScrubbing: $isScrubbing,
+                        scrubIndex: $scrubIndex,
+                        baseline: baseline,
+                        onScrubBegan: { Haptics.light() },
+                        onScrubEnded: { Haptics.selection() },
+                        onCrossBaseline: { crossedAbove in
+                            if let prev = crossedBaselinePreviouslyAbove, prev != crossedAbove { Haptics.selection() }
+                            crossedBaselinePreviouslyAbove = crossedAbove
+                        }
+                    )
+                    .frame(height: 260)
+                    .padding(.horizontal, 8)
+                    .transition(.opacity)
+                }
+            }
+
+            // Range Selector
+            RangeSelector(range: $range)
+                .padding(.horizontal, 20)
+        }
+        .padding(.top, 8)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+        .onAppear { loadData(animated: true) }
+        .onChange(of: range) { _ in
+            Haptics.selection()
+            loadData(animated: true)
+        }
+    }
+
+    private func loadData(animated: Bool) {
+        isLoading = true
+        fadeIn = false
+        DispatchQueue.global(qos: .userInitiated).async {
+            let generated = generatePoints(for: stock, range: range)
+            let downsampled = downsample(points: generated, targetCount: 240)
+            DispatchQueue.main.async {
+                withAnimation(animated ? .easeInOut(duration: 0.35) : .none) {
+                    self.points = downsampled
+                    self.isLoading = false
+                    self.scrubIndex = nil
+                    self.isScrubbing = false
+                    self.fadeIn = true
+                }
+            }
+        }
+    }
+
+    private func generatePoints(for stock: Stock, range: ChartRange) -> [ChartPoint] {
+        let now = Date()
+        let count: Int
+        switch range {
+        case .oneDay: count = 160
+        case .oneWeek: count = 220
+        case .oneMonth: count = 260
+        case .oneYear: count = 300
+        case .all: count = 240
+        }
+
+        let base = max(stock.currentPrice, 1)
+        let biasUp = stock.dailyChangePercent >= 0
+        let volatility = base * 0.012
+        let drift = base * (biasUp ? 0.0009 : -0.0009)
+
+        var pts: [ChartPoint] = []
+        var price = base - (biasUp ? base*0.01 : -base*0.01)
+        for i in 0..<count {
+            let t: TimeInterval
+            switch range {
+            case .oneDay: t = -TimeInterval(count - i) * 60 * 3
+            case .oneWeek: t = -TimeInterval(count - i) * 60 * 20
+            case .oneMonth: t = -TimeInterval(count - i) * 60 * 60 * 3
+            case .oneYear: t = -TimeInterval(count - i) * 60 * 60 * 24
+            case .all: t = -TimeInterval(count - i) * 60 * 60 * 24 * 3
+            }
+            let noise = Double.random(in: -volatility...volatility)
+            price = max(0.01, price + noise + drift)
+            pts.append(ChartPoint(date: now.addingTimeInterval(t), price: price))
+        }
+        return pts
+    }
+
+    private func downsample(points: [ChartPoint], targetCount: Int) -> [ChartPoint] {
+        guard points.count > targetCount else { return points }
+        let step = Double(points.count) / Double(targetCount)
+        var result: [ChartPoint] = []
+        var index: Double = 0
+        while Int(index) < points.count {
+            let i0 = Int(index)
+            let i1 = min(points.count - 1, Int(index + step))
+            let slice = points[i0...i1]
+            if let minP = slice.min(by: { $0.price < $1.price }), let maxP = slice.max(by: { $0.price < $1.price }) {
+                result.append(minP)
+                if maxP.id != minP.id { result.append(maxP) }
+            } else {
+                result.append(points[i0])
+            }
+            index += step
+        }
+        return result.sorted { $0.date < $1.date }
+    }
+}
+
+// MARK: - Range Selector (enhanced pills)
+private struct RangeSelector: View {
+    @Binding var range: ChartRange
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(ChartRange.allCases) { r in
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { range = r } }) {
+                    let isSelected = (range == r)
+                    let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
+                    let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                    let backgroundStyle: AnyShapeStyle = isSelected
+                        ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
+                        : AnyShapeStyle(primary.opacity(0.10))
+
+                    Text(r.display)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(isSelected ? .white : primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(backgroundStyle)
+                        )
+                        .overlay(
+                            Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1)
+                        )
+                        .shadow(color: primary.opacity(isSelected ? 0.22 : 0.0), radius: isSelected ? 8 : 0, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Ultra-Clean Chart (Path/Canvas)
+private struct UltraCleanChart: View {
+    let points: [ChartPoint]
+    let lineGradient: LinearGradient
+    let fillGradient: LinearGradient
+    @Binding var isScrubbing: Bool
+    @Binding var scrubIndex: Int?
+    let baseline: Double
+    var onScrubBegan: () -> Void = {}
+    var onScrubEnded: () -> Void = {}
+    var onCrossBaseline: (Bool) -> Void = { _ in }
+
+    @State private var lastCrossAbove: Bool? = nil
+
+    var body: some View {
+        GeometryReader { geo in
+            let frame = geo.frame(in: .local)
+            let normalized = normalize(points: points, in: frame.size)
+
+            ZStack {
+                // Fill under the line
+                if normalized.count > 1 {
+                    Path { p in
+                        guard let first = normalized.first, let last = normalized.last else { return }
+                        p.move(to: CGPoint(x: first.x, y: frame.height))
+                        normalized.forEach { p.addLine(to: $0) }
+                        p.addLine(to: CGPoint(x: last.x, y: frame.height))
+                        p.closeSubpath()
+                    }
+                    .fill(fillGradient)
+                }
+
+                // Baseline (whisper-light)
+                if let y = yForPrice(baseline, in: frame.size, points: points) {
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y))
+                        p.addLine(to: CGPoint(x: frame.width, y: y))
+                    }
+                    .stroke(Color.primary.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
+
+                // Line
+                Path { p in
+                    if let first = normalized.first { p.move(to: first) }
+                    for pt in normalized.dropFirst() { p.addLine(to: pt) }
+                }
+                .stroke(lineGradient, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+                // Scrub overlay
+                if let idx = scrubIndex, idx >= 0, idx < normalized.count, isScrubbing {
+                    let pt = normalized[idx]
+                    // Vertical hairline
+                    Path { p in
+                        p.move(to: CGPoint(x: pt.x, y: 0))
+                        p.addLine(to: CGPoint(x: pt.x, y: frame.height))
+                    }
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+
+                    // Focus dot
+                    Circle()
+                        .fill(lineGradient)
+                        .frame(width: 8, height: 8)
+                        .position(pt)
+
+                    // Tooltip
+                    if idx < points.count {
+                        let price = points[idx].price
+                        let date = points[idx].date
+                        FloatingTooltip(price: price, date: date, baseline: baseline)
+                            .position(x: clamp(pt.x + 60, min: 70, max: frame.width - 70), y: max(24, pt.y - 28))
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if !isScrubbing { isScrubbing = true; onScrubBegan() }
+                        let idx = indexForLocation(value.location, in: frame.size, points: points)
+                        if scrubIndex != idx { scrubIndex = idx }
+                        if let idx = idx, idx < points.count {
+                            let above = points[idx].price >= baseline
+                            if let last = lastCrossAbove, last != above { onCrossBaseline(above) }
+                            lastCrossAbove = above
+                        }
+                    }
+                    .onEnded { _ in
+                        isScrubbing = false
+                        scrubIndex = nil
+                        onScrubEnded()
+                    }
+            )
+        }
+    }
+
+    private func normalize(points: [ChartPoint], in size: CGSize) -> [CGPoint] {
+        guard let firstDate = points.first?.date, let lastDate = points.last?.date, firstDate != lastDate else { return [] }
+        let minPrice = points.map { $0.price }.min() ?? 0
+        let maxPrice = points.map { $0.price }.max() ?? 1
+        let pad = (maxPrice - minPrice) * 0.06
+        let lo = minPrice - pad
+        let hi = maxPrice + pad
+        let dt = lastDate.timeIntervalSince(firstDate)
+        return points.map { pt in
+            let x = CGFloat(pt.date.timeIntervalSince(firstDate) / dt) * size.width
+            let yNorm = (pt.price - lo) / max(hi - lo, 0.0001)
+            let y = size.height - CGFloat(yNorm) * size.height
+            return CGPoint(x: x, y: y)
+        }
+    }
+
+    private func indexForLocation(_ location: CGPoint, in size: CGSize, points: [ChartPoint]) -> Int? {
+        guard let firstDate = points.first?.date, let lastDate = points.last?.date, size.width > 0 else { return nil }
+        let dt = lastDate.timeIntervalSince(firstDate)
+        let t = Double(location.x / size.width) * dt
+        let targetDate = firstDate.addingTimeInterval(t)
+        var best: (idx: Int, dist: TimeInterval)? = nil
+        for (i, p) in points.enumerated() {
+            let d = abs(p.date.timeIntervalSince(targetDate))
+            if best == nil || d < best!.dist { best = (i, d) }
+        }
+        return best?.idx
+    }
+
+    private func yForPrice(_ price: Double, in size: CGSize, points: [ChartPoint]) -> CGFloat? {
+        let minPrice = points.map { $0.price }.min() ?? 0
+        let maxPrice = points.map { $0.price }.max() ?? 1
+        let pad = (maxPrice - minPrice) * 0.06
+        let lo = minPrice - pad
+        let hi = maxPrice + pad
+        guard hi - lo > 0 else { return nil }
+        let yNorm = (price - lo) / (hi - lo)
+        return size.height - CGFloat(yNorm) * size.height
+    }
+}
+
+// MARK: - Floating Tooltip
+private struct FloatingTooltip: View {
+    let price: Double
+    let date: Date
+    let baseline: Double
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        let bg = themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground
+        let border = themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border
+        let delta = price - baseline
+        let percent = baseline == 0 ? 0 : (delta / baseline * 100.0)
+        let positive = delta >= 0
+        VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                Text(String(format: "$%.2f", price))
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                Text(String(format: "%@%.2f%%", positive ? "+" : "", abs(percent)))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(positive ? .green : .red)
+            }
+            Text(shortTime(date))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(bg)
+                .shadow(color: Color.black.opacity(themeManager.isDarkMode ? 0.35 : 0.08), radius: 8, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(border, lineWidth: 0.5)
+                )
+        )
+    }
+
+    private func shortTime(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "MMM d, h:mm a"
+        return df.string(from: date)
+    }
+}
+
+// MARK: - Utilities
+fileprivate func clamp<T: Comparable>(_ value: T, min minValue: T, max maxValue: T) -> T {
+    return Swift.min(Swift.max(value, minValue), maxValue)
 }
 
 // MARK: - Technical Indicators Chart
@@ -1140,150 +592,10 @@ struct TechnicalIndicatorCard: View {
     }
 }
 
-// MARK: - Volume Chart
-struct VolumeChart: View {
-    let data: [ChartPoint]
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Volume")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            
-            Chart(data) { point in
-                BarMark(
-                    x: .value("Time", point.date),
-                    y: .value("Volume", point.price * 1000) // Mock volume data
-                )
-                .foregroundStyle(Color.blue.opacity(0.6))
-            }
-            .frame(height: 100)
-            .chartXAxis {
-                AxisMarks { value in
-                    AxisValueLabel()
-                }
-            }
-            .chartYAxis {
-                AxisMarks { value in
-                    AxisValueLabel()
-                }
-            }
-        }
-        .padding()
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-        .cornerRadius(12)
-    }
-}
+// (removed: VolumeChart)
 
 // MARK: - Crosshair Info View
-struct CrosshairInfoView: View {
-    let point: ChartPoint
-    let stock: Stock
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    private var percentChange: Double {
-        return ((point.price - stock.currentPrice) / stock.currentPrice) * 100
-    }
-    
-    private var isPositiveChange: Bool {
-        return percentChange >= 0
-    }
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Price")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text(point.formattedPrice)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .center, spacing: 4) {
-                Text("Change")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                HStack(spacing: 4) {
-                    Image(systemName: isPositiveChange ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(isPositiveChange ? Color.bullish : Color.bearish)
-                    
-                    Text(String(format: "%.2f%%", abs(percentChange)))
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(isPositiveChange ? Color.bullish : Color.bearish)
-                }
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("Time")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text(point.formattedTime)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            }
-        }
-        .padding()
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-        .cornerRadius(12)
-    }
-}
+// (removed: CrosshairInfoView)
 
 // MARK: - Price Range Display
-struct PriceRangeDisplay: View {
-    let stock: Stock
-    let selectedPoint: ChartPoint?
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Current")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                Text(selectedPoint?.formattedPrice ?? stock.formattedPrice)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-            }
-            
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("Change")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                
-                let change = (selectedPoint?.price ?? stock.currentPrice) - stock.currentPrice
-                let changePercent = (change / stock.currentPrice) * 100
-                let isPositive = change >= 0
-                
-                HStack(spacing: 4) {
-                    Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
-                    
-                    Text(String(format: "%.2f", abs(change)))
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
-                    
-                    Text("(\(String(format: "%.2f", abs(changePercent)))%)")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(isPositive ? Color.bullish : Color.bearish)
-                }
-            }
-        }
-        .padding()
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-        .cornerRadius(12)
-    }
-} 
+// (removed: PriceRangeDisplay)

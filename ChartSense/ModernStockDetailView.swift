@@ -60,10 +60,9 @@ struct ModernStockDetailView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var selectedTab = 0
     @State private var showingAddToWatchlist = false
-    @State private var selectedPoint: ChartPoint?
     @State private var currentStock: Stock
     
-    private let tabs = ["Sentiment", "Chart", "Analysis", "Community"]
+    private let tabs = ["Chart", "Sentiment", "Analysis", "Community"]
     
     init(stock: Stock) {
         self.stock = stock
@@ -75,7 +74,6 @@ struct ModernStockDetailView: View {
             // Professional Header
             ModernStockDetailHeader(
                 stock: currentStock,
-                selectedPoint: selectedPoint,
                 onBack: { dismiss() },
                 onAddToWatchlist: { showingAddToWatchlist = true }
             )
@@ -88,18 +86,18 @@ struct ModernStockDetailView: View {
             
             // Tab Content
             TabView(selection: $selectedTab) {
-                // Sentiment Tab (Default)
-                SentimentAnalysisTab(stock: currentStock)
-                    .tag(0)
-                
                 // Chart Tab
-                ProfessionalChartTab(stock: currentStock, selectedPoint: $selectedPoint)
+                UltraCleanChartTab(stock: currentStock)
+                    .tag(0)
+
+                // Sentiment Tab
+                SentimentAnalysisTab(stock: currentStock)
                     .tag(1)
-                
+
                 // Analysis Tab
                 ComprehensiveAnalysisTab(stock: currentStock)
                     .tag(2)
-                
+
                 // Community Tab
                 CommunityInsightsTab(stock: currentStock)
                     .tag(3)
@@ -282,7 +280,6 @@ struct AnimatedChangeText: View {
 // MARK: - Professional Stock Header
 struct ModernStockDetailHeader: View {
     let stock: Stock
-    let selectedPoint: ChartPoint?
     let onBack: () -> Void
     let onAddToWatchlist: () -> Void
     @StateObject private var themeManager = ThemeManager.shared
@@ -997,56 +994,9 @@ struct SentimentLoadingView: View {
     }
 }
 
-// MARK: - Professional Chart Tab
-struct ProfessionalChartTab: View {
-    let stock: Stock
-    @Binding var selectedPoint: ChartPoint?
-    @StateObject private var themeManager = ThemeManager.shared
-    @State private var selectedTimeframe: TimeFrame = .oneDay
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Chart Area (New Sense Chart)
-            SenseChartHost(
-                stock: stock,
-                selectedTimeframe: $selectedTimeframe,
-                selectedPoint: $selectedPoint
-            )
-            
+// (removed: ProfessionalChartTab)
 
-        }
-    }
-}
-
-// MARK: - Chart Point Model
-struct ChartPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let price: Double
-    
-    var formattedPrice: String {
-        return String(format: "$%.2f", price)
-    }
-    
-    var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-    
-    var formattedTime: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-    
-    var formattedDateOnly: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
-    }
-}
+// (removed: ChartPoint)
 
 
 
