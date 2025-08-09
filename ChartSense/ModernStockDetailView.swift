@@ -58,6 +58,8 @@ struct ModernStockDetailView: View {
     let stock: Stock
     @Environment(\.dismiss) private var dismiss
     @StateObject private var themeManager = ThemeManager.shared
+    @StateObject private var watchlistViewModel = WatchlistViewModel.shared
+    @StateObject private var premiumManager = PremiumManager.shared
     @State private var selectedTab = 0
     @State private var showingAddToWatchlist = false
     @State private var currentStock: Stock
@@ -123,6 +125,9 @@ struct ModernStockDetailView: View {
         .sheet(isPresented: $showingAddToWatchlist) {
             AddToWatchlistSheet(stock: currentStock)
         }
+        .sheet(isPresented: $premiumManager.showingPremiumUpgrade) {
+            PremiumUpgradeView()
+        }
         .onAppear {
             // Default to Chart tab on entry
             selectedTab = 0
@@ -162,7 +167,9 @@ struct SmoothPriceTransition: View {
     
     var body: some View {
         Text(String(format: "%.2f", displayPrice))
-            .font(.system(size: 32, weight: .semibold, design: .monospaced))
+            .font(.system(size: 40, weight: .bold, design: .default))
+            .monospacedDigit()
+            .kerning(-0.5)
             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
             .onChange(of: price) { newPrice in
                 if isAnimating {
@@ -206,27 +213,33 @@ struct SmoothChangeText: View {
     var body: some View {
         HStack(spacing: 0) {
             Text(isPositive ? "+" : "")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
             
             Text(String(format: "%.2f", displayChange))
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
             
             Text(" (")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
             
             Text(isPositive ? "+" : "")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
             
             Text(String(format: "%.2f", displayPercent))
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
             
             Text("%)")
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(.system(size: 16, weight: .semibold, design: .default))
+                .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
         }
         .onChange(of: change) { newChange in
@@ -296,17 +309,18 @@ struct ModernStockDetailHeader: View {
     let onBack: () -> Void
     let onAddToWatchlist: () -> Void
     @StateObject private var themeManager = ThemeManager.shared
-    @State private var isInWatchlist = false
+    @StateObject private var watchlistViewModel = WatchlistViewModel.shared
+    @StateObject private var premiumManager = PremiumManager.shared
     
     var body: some View {
         VStack(spacing: 0) {
             // Navigation Bar
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 34, height: 34)
                         .background(
                             Circle()
                                 .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
@@ -316,11 +330,19 @@ struct ModernStockDetailHeader: View {
                 
                 Spacer()
                 
-                Button(action: onAddToWatchlist) {
-                    Image(systemName: isInWatchlist ? "heart.fill" : "heart")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(isInWatchlist ? .red : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                        .frame(width: 44, height: 44)
+                Button(action: {
+                    if watchlistViewModel.isStockInWatchlist(stock.symbol) {
+                        if let item = watchlistViewModel.watchlistItems.first(where: { $0.symbol.uppercased() == stock.symbol.uppercased() }) {
+                            watchlistViewModel.removeFromWatchlist(item)
+                        }
+                    } else {
+                        watchlistViewModel.addToWatchlist(stock)
+                    }
+                }) {
+                    Image(systemName: watchlistViewModel.isStockInWatchlist(stock.symbol) ? "heart.fill" : "heart")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(watchlistViewModel.isStockInWatchlist(stock.symbol) ? .red : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
+                        .frame(width: 34, height: 34)
                         .background(
                             Circle()
                                 .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
@@ -328,40 +350,33 @@ struct ModernStockDetailHeader: View {
                         )
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
             
-            // Professional Stock Information
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Ticker and Company
+            // Professional Stock Information (ticker left; company and price underneath)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Ticker
+                    Text(stock.symbol)
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    // Company under ticker
+                    Text(stock.companyName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    // Price and change under company
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(stock.symbol)
-                            .font(.system(size: 28, weight: .bold, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text(stock.companyName)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    
-                    // Price and Change
-                    VStack(alignment: .leading, spacing: 6) {
-                        // Always show current price, not the crosshair price
                         SmoothPriceTransition(
                             price: stock.currentPrice,
                             isAnimating: false
                         )
-                        
-                        HStack(spacing: 8) {
-                            // Always show current daily change, not crosshair change
-                            let isPositive = stock.dailyChange >= 0
-                            
+                        let isPositive = stock.dailyChange >= 0
+                        HStack(spacing: 6) {
                             Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
-                            
                             SmoothChangeText(
                                 change: stock.dailyChange,
                                 percent: stock.dailyChangePercent,
@@ -371,11 +386,10 @@ struct ModernStockDetailHeader: View {
                         }
                     }
                 }
-                
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 8)
         }
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
     }

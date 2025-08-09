@@ -3,6 +3,9 @@ import Combine
 import PhotosUI
 import UIKit
 
+// Global AI accent gradient for consistent theming
+private let aiGradient = LinearGradient(colors: [Color.purple, Color.blue], startPoint: .leading, endPoint: .trailing)
+
 // MARK: - AI Chat Models
 // Using ChatMessage from Item.swift
 
@@ -36,8 +39,8 @@ struct ModernAIChatView: View {
         VStack(spacing: 0) {
             // Header
             AIChatHeader()
-                .padding(.top, 6)
-                .padding(.bottom, 2)
+                .padding(.top, 0)
+                .padding(.bottom, 0)
                 .background(
                     (themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
                         .ignoresSafeArea(edges: .top)
@@ -46,7 +49,7 @@ struct ModernAIChatView: View {
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 20) {
+                    LazyVStack(spacing: 14) {
                         // Welcome message
                         if viewModel.messages.isEmpty {
                             WelcomeMessage(
@@ -76,8 +79,8 @@ struct ModernAIChatView: View {
                             .frame(height: 1)
                             .id(bottomAnchorId)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
                 .onTapGesture { isInputFocused = false }
                 .onChange(of: viewModel.messages.count) { _ in
@@ -478,16 +481,16 @@ struct AIChatHeader: View {
     #endif
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             // Top Row: Icon, Title, Upgrade
             HStack(spacing: 12) {
-                AppRoundedIcon(size: 32)
+                AppRoundedIcon(size: 34)
                     #if DEBUG
                     .onLongPressGesture { debugForceFreeHeader.toggle() }
                     #endif
 
                 Text("ChartSense AI")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
@@ -495,36 +498,58 @@ struct AIChatHeader: View {
 
                 Spacer(minLength: 8)
 
-                if shouldShowLimitUI {
-                    UpgradePillButton(title: "Upgrade") {
+                UpgradePillButton(title: premiumManager.isPremium ? "Premium Active" : "Upgrade") {
+                    if !premiumManager.isPremium {
                         premiumManager.showPremiumUpgrade()
                     }
                 }
             }
 
-            // Second Row: Limits (separate line to avoid truncation)
-            if shouldShowLimitUI {
-                HStack(spacing: 10) {
-                    HStack(spacing: 8) {
-                        Text("\(premiumManager.aiMessagesRemaining) left today · \(Int(dailyFreeLimit))/day")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        ProgressView(value: progressValue)
-                            .progressViewStyle(LinearProgressViewStyle(tint: themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                            .frame(maxWidth: 120)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .cornerRadius(10)
+            // Metrics – ultra-minimal capsule (always shown; premium displays ∞)
+            HStack(spacing: 12) {
+                // Chats metric
+                HStack(spacing: 6) {
+                    Image(systemName: "ellipsis.bubble")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Chats")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(premiumManager.isPremium ? "Unlimited" : "\(Int(max(0, premiumManager.aiMessagesRemaining)))/\(Int(dailyFreeLimit))")
+                        .font(.system(size: 12, weight: .semibold))
                 }
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+
+                // Divider dot
+                Circle()
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
+                    .frame(width: 4, height: 4)
+
+                // Images metric
+                HStack(spacing: 6) {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Images")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(premiumManager.isPremium ? "Unlimited" : "\(Int(max(0, premiumManager.imageAnalysisRemaining)))/1")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(aiGradient, lineWidth: 1)
+                            .opacity(0.6)
+                    )
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.9)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
+        .padding(.vertical, 10)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
         .overlay(
             Rectangle()
@@ -580,17 +605,17 @@ struct WelcomeMessage: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // Unified, ultra-clean hero card with two clear actions
             NotionCard {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("What do you want to do?")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .truncationMode(.tail)
                     
-                    VStack(spacing: 10) {
+                    VStack(spacing: 8) {
                         Button(action: onAskStock) {
                             HStack(spacing: 10) {
                                 Image(systemName: "magnifyingglass")
@@ -601,15 +626,15 @@ struct WelcomeMessage: View {
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                                         .lineLimit(1)
-                                    Text("Concise answers with clean visuals")
-                                        .font(.system(size: 12, weight: .medium))
+                                     Text("Concise answers with clean visuals")
+                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                                        .lineLimit(1)
+                                         .lineLimit(1)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                    .foregroundStyle(aiGradient)
                             }
                             .padding(10)
                             .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
@@ -627,15 +652,15 @@ struct WelcomeMessage: View {
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                                         .lineLimit(1)
-                                    Text("Get patterns, levels, and a plan")
-                                        .font(.system(size: 12, weight: .medium))
+                                     Text("Get patterns, levels, and a plan")
+                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
-                                        .lineLimit(1)
+                                         .lineLimit(1)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                                    .foregroundStyle(aiGradient)
                             }
                             .padding(10)
                             .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
@@ -647,7 +672,7 @@ struct WelcomeMessage: View {
             }
             
             // Compact suggestion row
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(quickActions.prefix(3)) { suggestion in
                     SuggestionChip(title: suggestion.title, icon: suggestion.icon, action: suggestion.action)
                 }
@@ -663,19 +688,19 @@ struct MessageBubble: View {
     @State private var isAppearing = false
     
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 10) {
             if message.isUser {
                 Spacer(minLength: 60)
                 
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 6) {
                     // User message
                     MarkdownText(message.content)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                         .background(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                        .cornerRadius(18)
+                        .cornerRadius(14)
                         .cornerRadius(4, corners: .topLeft)
                         .textSelection(.enabled)
                         .lineSpacing(2)
@@ -701,15 +726,15 @@ struct MessageBubble: View {
                 AIChatAvatar(size: 28)
                     .frame(width: 28, height: 28)
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     // AI message
                     MarkdownText(message.content)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                         .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-                        .cornerRadius(18)
+                        .cornerRadius(14)
                         .cornerRadius(4, corners: .topRight)
                         .overlay(
                             RoundedRectangle(cornerRadius: 18)
@@ -888,14 +913,15 @@ struct ModernChatInput: View {
                 }) {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 34, height: 34)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 1)
+                                .stroke(aiGradient, lineWidth: 1)
+                                .opacity(0.8)
                         )
                         .overlay(
                             Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                         )
                 }
@@ -907,17 +933,14 @@ struct ModernChatInput: View {
                         .font(.system(size: 16, weight: .regular))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         .focused($isFocused)
-                        .lineLimit(1...4)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .lineLimit(1...6)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
                         .background(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                        .cornerRadius(20)
+                        .cornerRadius(18)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(
-                                    isFocused ? Color.blue : (themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border),
-                                    lineWidth: isFocused ? 2 : 0.5
-                                )
+                            RoundedRectangle(cornerRadius: 18)
+                                .stroke(isFocused ? AnyShapeStyle(aiGradient) : AnyShapeStyle(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border), lineWidth: isFocused ? 2 : 0.5)
                         )
                         .animation(.easeInOut(duration: 0.2), value: isFocused)
                     
@@ -930,11 +953,11 @@ struct ModernChatInput: View {
                         }
                     }) {
                         Circle()
-                            .fill(text.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary))
-                            .frame(width: 36, height: 36)
+                            .fill(text.isEmpty ? AnyShapeStyle(Color.gray.opacity(0.2)) : AnyShapeStyle(aiGradient))
+                            .frame(width: 34, height: 34)
                             .overlay(
                                 Image(systemName: "arrow.up")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
                             )
                     }
@@ -943,8 +966,8 @@ struct ModernChatInput: View {
                     .animation(.easeInOut(duration: 0.2), value: text.isEmpty)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
             .overlay(
                 Rectangle()
