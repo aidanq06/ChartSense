@@ -104,7 +104,7 @@ struct ChartLoadingView: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             ProgressView()
                 .scaleEffect(1.2)
                 .progressViewStyle(CircularProgressViewStyle(tint: .blue))
@@ -215,6 +215,7 @@ struct UltraCleanChartTab: View {
             // Range Selector
             RangeSelector(range: $range)
                 .padding(.horizontal, 20)
+                .padding(.bottom, 8)
         }
         .padding(.top, 8)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
@@ -303,7 +304,7 @@ private struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             ForEach(ChartRange.allCases) { r in
                 Button(action: { withAnimation(.easeInOut(duration: 0.2)) { range = r } }) {
                     let isSelected = (range == r)
@@ -315,17 +316,17 @@ private struct RangeSelector: View {
                         : AnyShapeStyle(primary.opacity(0.10))
 
                     Text(r.display)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(isSelected ? .white : primary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
                         .background(
                             Capsule().fill(backgroundStyle)
                         )
                         .overlay(
                             Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1)
                         )
-                        .shadow(color: primary.opacity(isSelected ? 0.28 : 0.0), radius: isSelected ? 10 : 0, x: 0, y: 6)
+                        .shadow(color: primary.opacity(isSelected ? 0.28 : 0.0), radius: isSelected ? 12 : 0, x: 0, y: 6)
                         .modifier(SelectedGlow(isSelected: isSelected, primary: primary, secondary: secondary))
                 }
                 .buttonStyle(.plain)
