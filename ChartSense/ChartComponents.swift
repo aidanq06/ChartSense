@@ -190,11 +190,12 @@ struct UltraCleanChartTab: View {
                         fillGradient: LinearGradient(
                             colors: [
                                 (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.25),
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary).opacity(0.06)
+                                Color.clear
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
+                        showFill: false,
                         isScrubbing: $isScrubbing,
                         scrubIndex: $scrubIndex,
                         baseline: baseline,
@@ -206,7 +207,7 @@ struct UltraCleanChartTab: View {
                         }
                     )
                     .frame(height: 260)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 0)
                     .transition(.opacity)
                 }
             }
@@ -308,6 +309,7 @@ private struct RangeSelector: View {
                     let isSelected = (range == r)
                     let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
                     let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                    let glow = primary.opacity(0.25)
                     let backgroundStyle: AnyShapeStyle = isSelected
                         ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
                         : AnyShapeStyle(primary.opacity(0.10))
@@ -323,10 +325,32 @@ private struct RangeSelector: View {
                         .overlay(
                             Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1)
                         )
-                        .shadow(color: primary.opacity(isSelected ? 0.22 : 0.0), radius: isSelected ? 8 : 0, x: 0, y: 4)
+                        .shadow(color: primary.opacity(isSelected ? 0.28 : 0.0), radius: isSelected ? 10 : 0, x: 0, y: 6)
+                        .modifier(SelectedGlow(isSelected: isSelected, primary: primary, secondary: secondary))
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+}
+
+private struct SelectedGlow: ViewModifier {
+    let isSelected: Bool
+    let primary: Color
+    let secondary: Color
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(colors: [primary.opacity(0.6), secondary.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1
+                        )
+                        .blur(radius: 0.5)
+                )
+        } else {
+            content
         }
     }
 }
@@ -336,6 +360,7 @@ private struct UltraCleanChart: View {
     let points: [ChartPoint]
     let lineGradient: LinearGradient
     let fillGradient: LinearGradient
+    let showFill: Bool
     @Binding var isScrubbing: Bool
     @Binding var scrubIndex: Int?
     let baseline: Double
@@ -349,18 +374,43 @@ private struct UltraCleanChart: View {
         GeometryReader { geo in
             let frame = geo.frame(in: .local)
             let normalized = normalize(points: points, in: frame.size)
+            let baselineY = (normalized.map { $0.y }.max() ?? frame.height) * 0.92
+            let areaPoints: [CGPoint] = {
+                guard normalized.count > 1 else { return [] }
+                var pts = normalized
+                if let last = normalized.last, let first = normalized.first {
+                    pts.append(CGPoint(x: last.x, y: baselineY))
+                    pts.append(CGPoint(x: first.x, y: baselineY))
+                }
+                return pts
+            }()
 
             ZStack {
                 // Fill under the line
-                if normalized.count > 1 {
+                if showFill, !areaPoints.isEmpty {
                     Path { p in
-                        guard let first = normalized.first, let last = normalized.last else { return }
-                        p.move(to: CGPoint(x: first.x, y: frame.height))
-                        normalized.forEach { p.addLine(to: $0) }
-                        p.addLine(to: CGPoint(x: last.x, y: frame.height))
+                        guard let first = areaPoints.first else { return }
+                        p.move(to: first)
+                        for pt in areaPoints.dropFirst() { p.addLine(to: pt) }
                         p.closeSubpath()
                     }
                     .fill(fillGradient)
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.10), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .blendMode(.plusLighter)
+                        .mask(
+                            Path { p in
+                                guard let first = areaPoints.first else { return }
+                                p.move(to: first)
+                                for pt in areaPoints.dropFirst() { p.addLine(to: pt) }
+                                p.closeSubpath()
+                            }
+                        )
+                    )
                 }
 
                 // Baseline (whisper-light)
@@ -372,12 +422,13 @@ private struct UltraCleanChart: View {
                     .stroke(Color.primary.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 }
 
-                // Line
+                // Line with subtle glow
                 Path { p in
                     if let first = normalized.first { p.move(to: first) }
                     for pt in normalized.dropFirst() { p.addLine(to: pt) }
                 }
-                .stroke(lineGradient, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .stroke(lineGradient, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                .shadow(color: Color.white.opacity(0.06), radius: 2, x: 0, y: 0)
 
                 // Scrub overlay
                 if let idx = scrubIndex, idx >= 0, idx < normalized.count, isScrubbing {
