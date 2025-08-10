@@ -498,7 +498,7 @@ struct AIChatHeader: View {
 
                 Spacer(minLength: 8)
 
-                UpgradePillButton(title: premiumManager.isPremium ? "Premium Active" : "Upgrade") {
+                AIGradientPillButton(title: premiumManager.isPremium ? "Premium Active" : "Upgrade") {
                     if !premiumManager.isPremium {
                         premiumManager.showPremiumUpgrade()
                     }
@@ -1027,3 +1027,36 @@ struct SuggestionChip: View {
 // Using NotionCard from Components.swift
 
 // Using cornerRadius extension from Components.swift 
+
+// MARK: - AI Gradient Pill Button (local to AI screen)
+struct AIGradientPillButton: View {
+    let title: String
+    let action: () -> Void
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(aiGradient)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+            )
+            .shadow(color: Color.blue.opacity(0.25), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}

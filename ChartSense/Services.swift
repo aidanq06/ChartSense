@@ -17,6 +17,7 @@ class StockService: ObservableObject {
     @Published var errorMessage: String?
     
     private let stockDataService = StockDataService.shared
+    private let supabase = SupabaseService.shared
     
     private init() {}
     
@@ -47,7 +48,15 @@ class StockService: ObservableObject {
     
     func getPopularStocks() async -> [Stock] {
         do {
-            return try await stockDataService.fetchMultipleStocks(symbols: popularSymbols)
+            // Hydrate symbols concurrently for speed
+            return try await withThrowingTaskGroup(of: Stock.self) { group in
+                for sym in popularSymbols {
+                    group.addTask { try await self.stockDataService.fetchStockData(symbol: sym) }
+                }
+                var out: [Stock] = []
+                for try await s in group { out.append(s) }
+                return out
+            }
         } catch {
             print("❌ Error fetching popular stocks: \(error)")
             return []

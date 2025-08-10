@@ -51,14 +51,17 @@ class SupabaseService: ObservableObject {
     }
     
     private func setupClient() {
-        supabaseURL = Config.supabaseURL
-        supabaseAnonKey = Config.supabaseAnonKey
-        
-        if supabaseURL == nil || supabaseAnonKey == nil {
-            print("❌ Missing Supabase configuration")
+        // Normalize and validate configuration
+        let url = Config.supabaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = Config.supabaseAnonKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty, !key.isEmpty else {
+            print("❌ Missing Supabase configuration (URL or Anon Key). Ensure `Config.plist` contains SUPABASE_URL and SUPABASE_ANON_KEY and is included in the app bundle.")
             return
         }
-        
+
+        supabaseURL = url
+        supabaseAnonKey = key
+
         print("✅ Supabase service initialized")
         Task { await restoreSession() }
     }
@@ -215,190 +218,116 @@ class SupabaseService: ObservableObject {
         throw SupabaseError.serverError("Google Sign In not implemented yet")
     }
     
-    // MARK: - Watchlist Management
-    
+    // MARK: - Watchlist Management (v2 schema)
+
+    private func defaultWatchlistId() async throws -> String {
+        // Ensure we have a fresh access token
+        _ = try await refreshAccessTokenIfNeeded()
+        guard let userId = currentUser?.id, let supabaseURL = supabaseURL, let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
+        // Find default
+        if let url = URL(string: "\(supabaseURL)/rest/v1/watchlists?user_id=eq.\(userId)&is_default=eq.true&select=id&limit=1") {
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            if let (data, resp) = try? await URLSession.shared.data(for: req), let http = resp as? HTTPURLResponse, http.statusCode == 200,
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], let row = arr.first, let id = row["id"] as? String { return id }
+        }
+        // Create default (return id)
+        let createURL = URL(string: "\(supabaseURL)/rest/v1/watchlists?select=id")!
+        var createReq = URLRequest(url: createURL)
+        createReq.httpMethod = "POST"
+        createReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        createReq.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        createReq.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        createReq.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        let body: [String: Any] = ["user_id": userId, "name": "Watchlist", "is_default": true, "position": 0]
+        createReq.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (d2, r2) = try await URLSession.shared.data(for: createReq)
+        if let h2 = r2 as? HTTPURLResponse, (200...201).contains(h2.statusCode),
+           let arr2 = try? JSONSerialization.jsonObject(with: d2) as? [[String: Any]], let id = arr2.first?["id"] as? String {
+            return id
+        }
+        // Fallback: read it back
+        if let url2 = URL(string: "\(supabaseURL)/rest/v1/watchlists?user_id=eq.\(userId)&is_default=eq.true&select=id&limit=1") {
+            var req2 = URLRequest(url: url2)
+            req2.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            req2.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            let (d3, r3) = try await URLSession.shared.data(for: req2)
+            if let h3 = r3 as? HTTPURLResponse, h3.statusCode == 200,
+               let arr3 = try? JSONSerialization.jsonObject(with: d3) as? [[String: Any]], let id = arr3.first?["id"] as? String {
+                return id
+            }
+        }
+        throw SupabaseError.serverError("Failed to create default watchlist")
+    }
+
     func addToWatchlist(symbol: String, companyName: String, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String = "above") async throws {
-        print("🔄 SupabaseService: Adding \(symbol) to watchlist...")
-        print("🔄 SupabaseService: User authenticated: \(isAuthenticated)")
-        print("🔄 SupabaseService: Current user: \(currentUser?.id ?? "nil")")
-        print("🔄 SupabaseService: Access token: \(accessToken != nil ? "present" : "missing")")
-        
-        guard let userId = currentUser?.id else { 
-            print("❌ SupabaseService: User not authenticated")
-            throw SupabaseError.notAuthenticated 
+        guard let supabaseURL = supabaseURL, let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
+        let wlId = try await defaultWatchlistId()
+        // Ensure symbol exists with name
+        if let url = URL(string: "\(supabaseURL)/rest/v1/symbols") {
+            var up = URLRequest(url: url)
+            up.httpMethod = "POST"
+            up.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            up.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            up.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            up.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+            up.httpBody = try JSONSerialization.data(withJSONObject: [["symbol": symbol.uppercased(), "name": companyName]])
+            _ = try? await URLSession.shared.data(for: up)
         }
-        guard let accessToken = accessToken else { 
-            print("❌ SupabaseService: Access token missing")
-            throw SupabaseError.notAuthenticated 
+        // Upsert item
+        let url = URL(string: "\(supabaseURL)/rest/v1/watchlist_items")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("resolution=merge-duplicates", forHTTPHeaderField: "Prefer")
+        let body: [String: Any] = ["watchlist_id": wlId, "symbol": symbol.uppercased(), "position": 0]
+        req.httpBody = try JSONSerialization.data(withJSONObject: [body])
+        let (_, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200...201).contains(http.statusCode) else {
+            throw SupabaseError.serverError("Failed to add to watchlist")
         }
-        guard let supabaseURL = supabaseURL else {
-            print("❌ SupabaseService: Supabase URL missing")
-            throw SupabaseError.networkError
-        }
-        
-        // First, ensure user profile exists
-        try await ensureUserProfileExists(userId: userId)
-        
-        do {
-            let url = URL(string: "\(supabaseURL)/rest/v1/watchlists")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-            
-            var body: [String: Any] = [
-                "user_id": userId,
-                "symbol": symbol.uppercased(),
-                "company_name": companyName,
-                "alerts_enabled": alertPrice != nil,
-                "alert_type": alertType
-            ]
-            
-            if let priceTarget = priceTarget {
-                body["price_target"] = priceTarget
-            }
-            
-            if let notes = notes {
-                body["notes"] = notes
-            }
-            
-            if let alertPrice = alertPrice {
-                body["alert_price"] = alertPrice
-            }
-            
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
-            if httpResponse.statusCode == 201 {
-                print("✅ SupabaseService: Successfully added \(symbol) to watchlist for user \(userId)")
-                
-                // Track usage
-                try await incrementUsageTracking(featureType: "watchlist_add")
-            } else {
-                let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                print("❌ SupabaseService: Add to watchlist error response: \(errorBody)")
-                print("❌ SupabaseService: HTTP status code: \(httpResponse.statusCode)")
-                
-                // Check if it's a foreign key constraint error
-                if errorBody.contains("user_profiles") && errorBody.contains("foreign key constraint") {
-                    print("🔧 Detected missing user profile, attempting to create one...")
-                    try await createUserProfile(userId: userId)
-                    
-                    // Retry the watchlist addition
-                    return try await addToWatchlist(symbol: symbol, companyName: companyName, priceTarget: priceTarget, notes: notes, alertPrice: alertPrice, alertType: alertType)
-                }
-                
-                throw SupabaseError.serverError("Failed to add to watchlist: \(httpResponse.statusCode) - \(errorBody)")
-            }
-        } catch {
-            print("❌ Error adding to watchlist: \(error)")
-            throw error
-        }
+        try await incrementUsageTracking(featureType: "watchlist_add")
     }
     
     func removeFromWatchlist(symbol: String) async throws {
-        guard let userId = currentUser?.id else { throw SupabaseError.notAuthenticated }
-        guard let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
-        guard let supabaseURL = supabaseURL else {
-            throw SupabaseError.networkError
-        }
-        
-        do {
-            let url = URL(string: "\(supabaseURL)/rest/v1/watchlists?user_id=eq.\(userId)&symbol=eq.\(symbol.uppercased())")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "DELETE"
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-            
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
-            if httpResponse.statusCode == 204 {
-                print("✅ Removed \(symbol) from watchlist for user \(userId)")
-            } else {
-                throw SupabaseError.serverError("Failed to remove from watchlist: \(httpResponse.statusCode)")
-            }
-        } catch {
-            print("❌ Error removing from watchlist: \(error)")
-            throw error
-        }
+        guard let supabaseURL = supabaseURL, let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
+        let wlId = try await defaultWatchlistId()
+        let url = URL(string: "\(supabaseURL)/rest/v1/watchlist_items?watchlist_id=eq.\(wlId)&symbol=eq.\(symbol.uppercased())")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (_, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 204 else { throw SupabaseError.serverError("Failed to remove from watchlist") }
     }
     
     func getWatchlist() async throws -> [WatchlistItem] {
-        guard let userId = currentUser?.id else { throw SupabaseError.notAuthenticated }
-        guard let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
-        guard let supabaseURL = supabaseURL else {
-            throw SupabaseError.networkError
+        guard let supabaseURL = supabaseURL, let accessToken = accessToken else { throw SupabaseError.notAuthenticated }
+        let wlId = try await defaultWatchlistId()
+        // Join watchlist_items with symbols to get names
+        let url = URL(string: "\(supabaseURL)/rest/v1/watchlist_items?watchlist_id=eq.\(wlId)&select=symbol,position,symbols!inner(name)&order=position.asc")!
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            print("❌ Get watchlist error response: \(body)")
+            throw SupabaseError.serverError("Failed to get watchlist: \(status) - \(body)")
         }
-        
-        do {
-            let url = URL(string: "\(supabaseURL)/rest/v1/watchlists?user_id=eq.\(userId)&order=added_at.desc")!
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
-            if httpResponse.statusCode == 200 {
-                if let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    let watchlistItems = jsonArray.compactMap { row -> WatchlistItem? in
-                        guard let symbol = row["symbol"] as? String,
-                              let companyName = row["company_name"] as? String else {
-                            return nil
-                        }
-                        
-                        let alertsEnabled = row["alerts_enabled"] as? Bool ?? false
-                        let priceTarget = row["price_target"] as? Double
-                        let notes = row["notes"] as? String
-                        let alertPrice = row["alert_price"] as? Double
-                        let alertType = row["alert_type"] as? String ?? "above"
-                        let addedAtString = row["added_at"] as? String
-                        
-                        let addedAt: Date
-                        if let addedAtString = addedAtString {
-                            let formatter = ISO8601DateFormatter()
-                            addedAt = formatter.date(from: addedAtString) ?? Date()
-                        } else {
-                            addedAt = Date()
-                        }
-                        
-                        return WatchlistItem(
-                            symbol: symbol,
-                            companyName: companyName,
-                            alertsEnabled: alertsEnabled,
-                            priceTarget: priceTarget,
-                            notes: notes,
-                            alertPrice: alertPrice,
-                            alertType: alertType,
-                            addedDate: addedAt
-                        )
-                    }
-                    
-                    print("✅ Retrieved \(watchlistItems.count) watchlist items")
-                    return watchlistItems
-                }
-            }
-            
-            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ Get watchlist error response: \(errorBody)")
-            throw SupabaseError.serverError("Failed to get watchlist: \(httpResponse.statusCode) - \(errorBody)")
-        } catch {
-            print("❌ Error getting watchlist: \(error)")
-            throw error
+        guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        let items: [WatchlistItem] = arr.compactMap { row in
+            let symbol = (row["symbol"] as? String) ?? "?"
+            let symObj = row["symbols"] as? [String: Any]
+            let name = (symObj?["name"] as? String) ?? symbol
+            return WatchlistItem(symbol: symbol, companyName: name)
         }
+        print("✅ Retrieved \(items.count) watchlist items")
+        return items
     }
     
     func updateWatchlistItem(symbol: String, priceTarget: Double? = nil, notes: String? = nil, alertPrice: Double? = nil, alertType: String? = nil, alertsEnabled: Bool? = nil) async throws {
@@ -540,101 +469,29 @@ class SupabaseService: ObservableObject {
     // MARK: - Stock Data
     
     func fetchStockData(symbol: String) async throws -> Stock {
-        guard let supabaseURL = supabaseURL,
-              let supabaseAnonKey = supabaseAnonKey else {
-            throw SupabaseError.networkError
+        // Use quotes_display for current price; fetch company name from symbols
+        guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+        // Price
+        let priceTuple = try await fetchQuoteDisplay(symbol: symbol)
+        // Name
+        var companyName = symbol.uppercased()
+        if let url = URL(string: "\(supabaseURL)/rest/v1/symbols?symbol=eq.\(symbol.uppercased())&select=name") {
+            var req = URLRequest(url: url)
+            req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            if let (data, resp) = try? await URLSession.shared.data(for: req), let http = resp as? HTTPURLResponse, http.statusCode == 200, let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], let row = arr.first, let name = row["name"] as? String, !name.isEmpty {
+                companyName = name
+            }
         }
-        
-        do {
-            // First try to get from our database
-            let url = URL(string: "\(supabaseURL)/rest/v1/stock_prices?symbol=eq.\(symbol.uppercased())&select=*,stocks(company_name)")!
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-            
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
-            if httpResponse.statusCode == 200 {
-                if let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
-                   let stockData = jsonArray.first {
-                    
-                    let currentPrice = stockData["current_price"] as? Double ?? 0.0
-                    let dailyChange = stockData["daily_change"] as? Double ?? 0.0
-                    let dailyChangePercent = stockData["daily_change_percent"] as? Double ?? 0.0
-                    let volume = stockData["volume"] as? Int64 ?? 0
-                    let marketCap = stockData["market_cap"] as? Double ?? 0.0
-                    let peRatio = stockData["pe_ratio"] as? Double ?? 0.0
-                    
-                    let stocksData = stockData["stocks"] as? [String: Any]
-                    let companyName = stocksData?["company_name"] as? String ?? "\(symbol) Corporation"
-                    
-                    print("✅ Found stock data in database for \(symbol): price=\(currentPrice), change=\(dailyChange)")
-                    
-                    return Stock(
-                        symbol: symbol.uppercased(),
-                        companyName: companyName,
-                        currentPrice: currentPrice,
-                        dailyChange: dailyChange,
-                        dailyChangePercent: dailyChangePercent,
-                        marketCap: marketCap,
-                        volume: volume,
-                        peRatio: peRatio
-                    )
-                }
-            }
-            
-            // If not in database, fetch from Edge Function
-            print("🔄 Fetching fresh data for \(symbol) via Edge Function")
-            
-            let functionURL = URL(string: "\(supabaseURL)/functions/v1/fetch-stock-data")!
-            var functionRequest = URLRequest(url: functionURL)
-            functionRequest.httpMethod = "POST"
-            functionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            functionRequest.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-            
-            let functionBody = ["symbol": symbol]
-            functionRequest.httpBody = try JSONSerialization.data(withJSONObject: functionBody)
-            
-            let (functionData, functionResponse) = try await URLSession.shared.data(for: functionRequest)
-            
-            guard let functionHttpResponse = functionResponse as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
-            if functionHttpResponse.statusCode == 200 {
-                if let responseJson = try JSONSerialization.jsonObject(with: functionData) as? [String: Any],
-                   let data = responseJson["data"] as? [[String: Any]],
-                   let stockInfo = data.first {
-                    
-                    let currentPrice = stockInfo["current_price"] as? Double ?? 0.0
-                    let dailyChange = stockInfo["daily_change"] as? Double ?? 0.0
-                    let dailyChangePercent = stockInfo["daily_change_percent"] as? Double ?? 0.0
-                    let volume = stockInfo["volume"] as? Int64 ?? 0
-                    
-                    print("✅ Fetched fresh stock data via Edge Function for \(symbol): price=\(currentPrice), change=\(dailyChange)")
-                    
-                    return Stock(
-                        symbol: symbol.uppercased(),
-                        companyName: "\(symbol) Corporation",
-                        currentPrice: currentPrice,
-                        dailyChange: dailyChange,
-                        dailyChangePercent: dailyChangePercent,
-                        marketCap: 0,
-                        volume: volume,
-                        peRatio: 0
-                    )
-                }
-            }
-            
-            throw SupabaseError.invalidResponse
-        } catch {
-            print("❌ Error fetching stock data: \(error)")
-            throw error
-        }
+        return Stock(
+            symbol: symbol.uppercased(),
+            companyName: companyName,
+            currentPrice: priceTuple.price,
+            dailyChange: priceTuple.delta ?? 0,
+            dailyChangePercent: priceTuple.deltaPercent ?? 0,
+            marketCap: nil,
+            volume: nil,
+            peRatio: nil
+        )
     }
     
     func fetchSentimentData(symbol: String) async throws -> SentimentAnalysis {
@@ -813,9 +670,8 @@ class SupabaseService: ObservableObject {
     // MARK: - AI Chat
     
     func sendAIMessage(message: String) async throws -> ChatMessage {
-        guard let userId = currentUser?.id else { throw SupabaseError.notAuthenticated }
-        guard let supabaseURL = supabaseURL,
-              let supabaseAnonKey = supabaseAnonKey else {
+        guard currentUser?.id != nil else { throw SupabaseError.notAuthenticated }
+        guard let supabaseURL = supabaseURL else {
             throw SupabaseError.networkError
         }
         
@@ -824,11 +680,14 @@ class SupabaseService: ObservableObject {
             var functionRequest = URLRequest(url: functionURL)
             functionRequest.httpMethod = "POST"
             functionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            functionRequest.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+            // Use user access token so the function can enforce per-user limits
+            if let accessToken = self.accessToken {
+                functionRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            }
             
             let functionBody = [
                 "message": message,
-                "userId": userId
+                // user inferred from auth header by function
             ]
             functionRequest.httpBody = try JSONSerialization.data(withJSONObject: functionBody)
             
@@ -840,7 +699,7 @@ class SupabaseService: ObservableObject {
             
             if functionHttpResponse.statusCode == 200 {
                 if let responseJson = try JSONSerialization.jsonObject(with: functionData) as? [String: Any],
-                   let content = responseJson["content"] as? String {
+                   let content = (responseJson["reply"] as? String) ?? (responseJson["content"] as? String) {
                     
                     let aiMessage = ChatMessage(
                         content: content,
@@ -856,6 +715,110 @@ class SupabaseService: ObservableObject {
         } catch {
             print("❌ Error sending AI message: \(error)")
             throw error
+        }
+    }
+
+    // MARK: - Market Data (Supabase)
+
+    func fetchQuoteDisplay(symbol: String) async throws -> (price: Double, session: String, delta: Double?, deltaPercent: Double?, ts: Date) {
+        guard let supabaseURL = supabaseURL,
+              let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+
+        // Primary path: quotes_display view (if present)
+        if let viewURL = URL(string: "\(supabaseURL)/rest/v1/quotes_display?symbol=eq.\(symbol.uppercased())") {
+            var req = URLRequest(url: viewURL)
+            req.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+            req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+            if let (data, resp) = try? await URLSession.shared.data(for: req),
+               let http = resp as? HTTPURLResponse, http.statusCode == 200,
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+               let row = arr.first {
+                let price = row["display_price"] as? Double ?? row["price"] as? Double ?? 0
+                let session = (row["session"] as? String) ?? "unknown"
+                let tsStr = (row["display_ts"] as? String) ?? (row["ts"] as? String) ?? ISO8601DateFormatter().string(from: Date())
+                let ts = ISO8601DateFormatter().date(from: tsStr) ?? Date()
+                let prev = row["previous_close"] as? Double
+                let delta = (prev != nil) ? (price - prev!) : nil
+                let deltaPct = (prev != nil && prev! != 0) ? ((price - prev!) / prev! * 100.0) : nil
+                return (price, session, delta, deltaPct, ts)
+            }
+        }
+
+        // Fallback: direct read from quotes_latest
+        let url = URL(string: "\(supabaseURL)/rest/v1/quotes_latest?symbol=eq.\(symbol.uppercased())&select=price,ts,previous_close,extended_price,extended_ts,premarket_price,premarket_ts,session")!
+        var req = URLRequest(url: url)
+        // Public read: use anon apikey only
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], let row = arr.first else {
+            throw SupabaseError.invalidResponse
+        }
+
+        let session = (row["session"] as? String) ?? "unknown"
+        let priceRegular = row["price"] as? Double
+        let priceExt = row["extended_price"] as? Double
+        let pricePre = row["premarket_price"] as? Double
+        let tsRegular = row["ts"] as? String
+        let tsExt = row["extended_ts"] as? String
+        let tsPre = row["premarket_ts"] as? String
+
+        // Compute display price and timestamp following session if provided; otherwise prefer the most recent timestamp
+        var displayPrice: Double? = nil
+        var tsStr: String? = nil
+        if session == "extended", let p = priceExt, let t = tsExt { displayPrice = p; tsStr = t }
+        else if session == "premarket", let p = pricePre, let t = tsPre { displayPrice = p; tsStr = t }
+        else if let p = priceRegular, let t = tsRegular { displayPrice = p; tsStr = t }
+
+        // If no session-based selection, pick the latest by timestamp
+        if displayPrice == nil {
+            let candidates: [(Double?, String?)] = [ (priceRegular, tsRegular), (priceExt, tsExt), (pricePre, tsPre) ]
+            let fmt = ISO8601DateFormatter()
+            let best = candidates.compactMap { (p, t) -> (Double, String, Date)? in
+                guard let p = p, let t = t, let d = fmt.date(from: t) else { return nil }
+                return (p, t, d)
+            }.sorted { $0.2 > $1.2 }.first
+            if let best = best { displayPrice = best.0; tsStr = best.1 }
+        }
+
+        let price = displayPrice ?? (priceRegular ?? 0)
+        let ts = ISO8601DateFormatter().date(from: tsStr ?? "") ?? Date()
+        let prev = row["previous_close"] as? Double
+        let delta = (prev != nil) ? (price - prev!) : nil
+        let deltaPct = (prev != nil && prev! != 0) ? ((price - prev!) / prev! * 100.0) : nil
+        return (price, session, delta, deltaPct, ts)
+    }
+
+    func fetchCandles5m(symbol: String, hoursBack: Int = 24) async throws -> [(Date, Double)] {
+        guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+        let fromISO: String = ISO8601DateFormatter().string(from: Date().addingTimeInterval(Double(-hoursBack) * 3600))
+        let url = URL(string: "\(supabaseURL)/rest/v1/candles_5m?symbol=eq.\(symbol.uppercased())&ts=gt.\(fromISO)&select=ts,close&order=ts.asc")!
+        var req = URLRequest(url: url)
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw SupabaseError.invalidResponse }
+        let iso = ISO8601DateFormatter()
+        return arr.compactMap { row in
+            guard let tsStr = row["ts"] as? String, let close = row["close"] as? Double, let d = iso.date(from: tsStr) else { return nil }
+            return (d, close)
+        }
+    }
+
+    func fetchCandles1d(symbol: String, daysBack: Int = 365) async throws -> [(Date, Double)] {
+        guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+        let fromDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: Date()) ?? Date().addingTimeInterval(-365*86400)
+        let dayStr = ISO8601DateFormatter().string(from: fromDate).prefix(10)
+        let url = URL(string: "\(supabaseURL)/rest/v1/candles_1d?symbol=eq.\(symbol.uppercased())&day=gt.\(dayStr)&select=day,close&order=day.asc")!
+        var req = URLRequest(url: url)
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw SupabaseError.invalidResponse }
+        let df = ISO8601DateFormatter()
+        return arr.compactMap { row in
+            guard let dayStr = row["day"] as? String, let close = row["close"] as? Double, let d = df.date(from: dayStr + "T00:00:00Z") else { return nil }
+            return (d, close)
         }
     }
     
@@ -1123,58 +1086,35 @@ class SupabaseService: ObservableObject {
     // MARK: - Stock Data
     
     func getAllStocks() async throws -> [Stock] {
-        guard let supabaseURL = supabaseURL,
-              let supabaseAnonKey = supabaseAnonKey else {
+        guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else {
             throw SupabaseError.networkError
         }
-        
         do {
-            let url = URL(string: "\(supabaseURL)/rest/v1/stocks?select=*&is_active=eq.true&order=symbol.asc")!
+            let url = URL(string: "\(supabaseURL)/rest/v1/symbols?select=symbol,name&order=symbol.asc")!
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+            let authHeader = (self.accessToken != nil) ? "Bearer \(self.accessToken!)" : "Bearer \(supabaseAnonKey)"
+            request.setValue(authHeader, forHTTPHeaderField: "Authorization")
             request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-            
             let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw SupabaseError.networkError
-            }
-            
+            guard let httpResponse = response as? HTTPURLResponse else { throw SupabaseError.networkError }
             if httpResponse.statusCode == 200 {
-                if let stocksData = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    var stocks: [Stock] = []
-                    
-                    for stockData in stocksData {
-                        if let symbol = stockData["symbol"] as? String,
-                           let companyName = stockData["company_name"] as? String {
-                            
-                            // Create a basic Stock object with default values
-                            // We'll fetch real-time data separately if needed
-                            let stock = Stock(
-                                symbol: symbol,
-                                companyName: companyName,
-                                currentPrice: 0.0, // Will be updated with real data
-                                dailyChange: 0.0,
-                                dailyChangePercent: 0.0
-                            )
-                            stocks.append(stock)
-                        }
-                    }
-                    
-                    print("✅ Fetched \(stocks.count) stocks from database")
-                    return stocks
-                } else {
-                    throw SupabaseError.invalidResponse
+                guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw SupabaseError.invalidResponse }
+                let stocks: [Stock] = rows.compactMap { row in
+                    guard let sym = row["symbol"] as? String else { return nil }
+                    let name = (row["name"] as? String) ?? sym
+                    return Stock(symbol: sym, companyName: name, currentPrice: 0.0, dailyChange: 0.0, dailyChangePercent: 0.0)
                 }
+                print("✅ Fetched \(stocks.count) symbols")
+                return stocks
             } else {
                 let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-                print("❌ Error fetching stocks: \(httpResponse.statusCode) - \(errorBody)")
-                throw SupabaseError.serverError("Failed to fetch stocks: \(httpResponse.statusCode)")
+                print("❌ Error fetching symbols: \(httpResponse.statusCode) - \(errorBody)")
+                throw SupabaseError.serverError("Failed to fetch symbols: \(httpResponse.statusCode)")
             }
         } catch {
-            print("❌ Error fetching stocks: \(error)")
+            print("❌ Error fetching symbols: \(error)")
             throw error
         }
     }

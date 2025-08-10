@@ -63,6 +63,7 @@ class SearchViewModel: ObservableObject {
     
     private let searchService = SearchService.shared
     private let stockService = StockService.shared
+    private let stockDataService = StockDataService.shared
     private let supabaseService = SupabaseService.shared
     private var searchCancellable: AnyCancellable?
     
@@ -109,6 +110,9 @@ class SearchViewModel: ObservableObject {
             stock.symbol.localizedCaseInsensitiveContains(query) ||
             stock.companyName.localizedCaseInsensitiveContains(query)
         }
+
+        // Hydrate prices for visible results
+        await hydrateSearchResults(limit: 50)
     }
     
     func selectRecentSearch(_ search: String) {
@@ -150,6 +154,8 @@ class SearchViewModel: ObservableObject {
             allStocks = stocks
             searchResults = stocks // Show all stocks by default
             print("✅ Loaded \(stocks.count) stocks from database")
+            // Hydrate initial list with prices (top 50 to keep it snappy)
+            await hydrateSearchResults(limit: 50)
         } catch {
             print("❌ Error loading all stocks: \(error)")
             allStocks = []
@@ -157,6 +163,29 @@ class SearchViewModel: ObservableObject {
         }
         
         isLoadingAllStocks = false
+    }
+
+    // MARK: - Hydration
+    @MainActor
+    private func hydrateSearchResults(limit: Int = 50) async {
+        let symbols = Array(searchResults.prefix(limit)).map { $0.symbol }
+        guard !symbols.isEmpty else { return }
+        do {
+            let hydrated = try await withThrowingTaskGroup(of: Stock.self) { group in
+                for sym in symbols { group.addTask { try await self.stockDataService.fetchStockData(symbol: sym) } }
+                var out: [Stock] = []
+                for try await s in group { out.append(s) }
+                return out
+            }
+            let bySymbol = Dictionary(uniqueKeysWithValues: hydrated.map { ($0.symbol, $0) })
+            // Update current searchResults
+            searchResults = searchResults.map { bySymbol[$0.symbol] ?? $0 }
+            if !hasSearched {
+                allStocks = allStocks.map { bySymbol[$0.symbol] ?? $0 }
+            }
+        } catch {
+            print("⚠️ Hydration failed: \(error)")
+        }
     }
 }
 
@@ -282,6 +311,11 @@ class WatchlistViewModel: ObservableObject {
     
     @MainActor
     func loadWatchlist() {
+        // Require auth before hitting RLS-protected tables
+        guard supabaseService.isAuthenticated else { 
+            print("⏸️ Skipping loadWatchlist: not authenticated yet")
+            return 
+        }
         isLoading = true
         errorMessage = nil
         

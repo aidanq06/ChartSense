@@ -219,17 +219,41 @@ struct UltraCleanChartTab: View {
 
     private func loadData(animated: Bool) {
         fadeIn = false
-        DispatchQueue.global(qos: .userInitiated).async {
-            let generated = generatePoints(for: stock, range: range)
-            let downsampled = downsample(points: generated, targetCount: 240)
-            DispatchQueue.main.async {
-                self.points = downsampled
-                self.scrubIndex = nil
-                self.isScrubbing = false
-                self.fadeIn = true
-                self.drawProgress = 0.0
-                withAnimation(.easeInOut(duration: 0.9)) {
-                    self.drawProgress = 1.0
+        Task.detached(priority: .userInitiated) {
+            do {
+                let svc = SupabaseService.shared
+                let series: [(Date, Double)]
+                switch range {
+                case .oneDay:
+                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24)
+                case .oneWeek:
+                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 7)
+                case .oneMonth:
+                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 30)
+                case .oneYear, .all:
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: range == .oneYear ? 365 : 365 * 5)
+                }
+                let pts = series.map { ChartPoint(date: $0.0, price: $0.1) }
+                let downsampled = downsample(points: pts, targetCount: 240)
+                await MainActor.run {
+                    self.points = downsampled
+                    self.scrubIndex = nil
+                    self.isScrubbing = false
+                    self.fadeIn = true
+                    self.drawProgress = 0.0
+                    withAnimation(.easeInOut(duration: 0.9)) { self.drawProgress = 1.0 }
+                }
+            } catch {
+                // Fallback to generated if Supabase fails
+                let generated = generatePoints(for: stock, range: range)
+                let downsampled = downsample(points: generated, targetCount: 240)
+                await MainActor.run {
+                    self.points = downsampled
+                    self.scrubIndex = nil
+                    self.isScrubbing = false
+                    self.fadeIn = true
+                    self.drawProgress = 0.0
+                    withAnimation(.easeInOut(duration: 0.9)) { self.drawProgress = 1.0 }
                 }
             }
         }

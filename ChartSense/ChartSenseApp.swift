@@ -32,8 +32,8 @@ struct ChartSenseApp: App {
                 .onAppear {
                     setupAppearance()
                     validateConfiguration()
-                    warmCache()
-                    startRealTimeUpdates()
+                    // Ensure auth/session restoration completes before loading RLS data
+                    Task { await SupabaseService.shared.checkAuthenticationStatus() }
                 }
         }
     }
@@ -96,9 +96,7 @@ struct ChartSenseApp: App {
     }
     
     private func warmCache() {
-        Task {
-            await StockDataService.shared.warmCache()
-        }
+        // Supabase-backed; device no longer warms external APIs
     }
     
     private func startRealTimeUpdates() {

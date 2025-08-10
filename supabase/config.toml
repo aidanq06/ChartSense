@@ -26,7 +26,6 @@ pop3_port = 54326
 
 [storage]
 enabled = true
-port = 54327
 file_size_limit = "50MiB"
 image_transformation = { enabled = true }
 
@@ -35,13 +34,10 @@ enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["https://your-app-domain.com"]
 jwt_expiry = 3600
-refresh_token_rotation_enabled = true
-security_update_password_require_reauthentication = true
 
 # Email authentication
 [auth.email]
 enable_signup = true
-double_confirm_email = false
 enable_confirmations = false
 
 # Social authentication providers
@@ -58,13 +54,14 @@ secret = "env(GOOGLE_CLIENT_SECRET)"
 # Additional Google-specific settings will be configured in dashboard
 
 # Edge Functions configuration
-[functions]
+[functions."ingest-quotes"]
+verify_jwt = false
+
+[functions."ingest-candles"]
 verify_jwt = false
 
 # Analytics and monitoring
 [analytics]
 enabled = false
 
-# Experimental features
-[experimental]
-webhooks = false 
+# Experimental features (none configured)

@@ -5,8 +5,8 @@ import Combine
 class StockDataService: ObservableObject {
     static let shared = StockDataService()
     
-    private let apiKey = Config.finnhubAPIKey
-    private let baseURL = "https://finnhub.io/api/v1"
+    // Supabase-backed data source; Finnhub no longer called from device
+    private let supabase = SupabaseService.shared
     
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -21,18 +21,10 @@ class StockDataService: ObservableObject {
     
     private init() {
         print("📈 Initializing StockDataService...")
-        validateAPIKey()
         startBackgroundRefresh()
     }
     
-    private func validateAPIKey() {
-        if apiKey.isEmpty || apiKey == "YOUR_FINNHUB_API_KEY_HERE" {
-            print("❌ Finnhub API key not configured!")
-            print("💡 Please add your Finnhub API key to Config.plist")
-        } else {
-            print("✅ Finnhub API key configured")
-        }
-    }
+    private func validateAPIKey() { /* no-op: using Supabase */ }
     
     // MARK: - Public Methods
     
@@ -43,10 +35,8 @@ class StockDataService: ObservableObject {
             return cachedData
         }
         
-        print("🌐 Fetching real data for \(symbol) from Finnhub...")
-        
-        // Make API call
-        let stock = try await fetchStockFromAPI(symbol)
+        print("🌐 Fetching real data for \(symbol) from Supabase...")
+        let stock = try await fetchStockFromSupabase(symbol)
         
         // Cache the result
         cacheStockData(stock, for: symbol)
@@ -99,51 +89,31 @@ class StockDataService: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func fetchStockFromAPI(_ symbol: String) async throws -> Stock {
-        guard !apiKey.isEmpty && apiKey != "YOUR_FINNHUB_API_KEY_HERE" else {
-            throw StockDataError.apiKeyNotConfigured
+    private func fetchStockFromSupabase(_ symbol: String) async throws -> Stock {
+        let display = try await supabase.fetchQuoteDisplay(symbol: symbol)
+        // Try to get company name from symbols table
+        var companyName = "\(symbol.uppercased())"
+        let supabaseURL = Config.supabaseURL
+        let anon = Config.supabaseAnonKey
+        if let url = URL(string: "\(supabaseURL)/rest/v1/symbols?symbol=eq.\(symbol.uppercased())&select=name") {
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(anon)", forHTTPHeaderField: "Authorization")
+            req.setValue(anon, forHTTPHeaderField: "apikey")
+            if let (data, resp) = try? await URLSession.shared.data(for: req), let http = resp as? HTTPURLResponse, http.statusCode == 200, let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]], let row = arr.first, let name = row["name"] as? String, !name.isEmpty {
+                companyName = name
+            }
         }
-        
-        let urlString = "\(baseURL)/quote?symbol=\(symbol.uppercased())&token=\(apiKey)"
-        
-        guard let url = URL(string: urlString) else {
-            throw StockDataError.invalidURL
-        }
-        
-        print("🔗 Making API call to: \(urlString)")
-        
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw StockDataError.invalidResponse
-        }
-        
-        print("📊 API Response status: \(httpResponse.statusCode)")
-        
-        if httpResponse.statusCode == 429 {
-            print("⚠️ Rate limit exceeded, waiting 2 seconds before retry...")
-            try await Task.sleep(nanoseconds: 2_000_000_000) // Wait 2 seconds
-            throw StockDataError.rateLimitExceeded
-        }
-        
-        if httpResponse.statusCode != 200 {
-            print("❌ API Error: \(String(data: data, encoding: .utf8) ?? "unknown")")
-            throw StockDataError.apiError(httpResponse.statusCode)
-        }
-        
-        // Parse the response
-        let finnhubResponse = try JSONDecoder().decode(FinnhubQuoteResponse.self, from: data)
-        
-        // Convert to our Stock model
+        let dailyChange = display.delta ?? 0
+        let dailyChangePercent = display.deltaPercent ?? 0
         return Stock(
             symbol: symbol.uppercased(),
-            companyName: "\(symbol.uppercased()) Corporation", // We'll get real company names later
-            currentPrice: finnhubResponse.c,
-            dailyChange: finnhubResponse.d,
-            dailyChangePercent: finnhubResponse.dp,
-            marketCap: 0, // Not available in basic quote
-            volume: Int64(finnhubResponse.v ?? 0),
-            peRatio: 0 // Not available in basic quote
+            companyName: companyName,
+            currentPrice: display.price,
+            dailyChange: dailyChange,
+            dailyChangePercent: dailyChangePercent,
+            marketCap: nil,
+            volume: nil,
+            peRatio: nil
         )
     }
     
@@ -233,16 +203,7 @@ class StockDataService: ObservableObject {
 }
 
 // MARK: - Finnhub API Response Models
-struct FinnhubQuoteResponse: Codable {
-    let c: Double      // Current price
-    let d: Double      // Change
-    let dp: Double     // Percent change
-    let h: Double      // High price of the day
-    let l: Double      // Low price of the day
-    let o: Double      // Open price of the day
-    let pc: Double     // Previous close price
-    let v: Int?        // Volume (optional)
-}
+// Finnhub response structs removed; device no longer calls Finnhub directly
 
 // MARK: - Errors
 enum StockDataError: Error, LocalizedError {
