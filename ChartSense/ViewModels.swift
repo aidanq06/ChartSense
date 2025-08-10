@@ -111,8 +111,8 @@ class SearchViewModel: ObservableObject {
             stock.companyName.localizedCaseInsensitiveContains(query)
         }
 
-        // Hydrate prices for visible results
-        await hydrateSearchResults(limit: 50)
+        // Hydrate prices for visible results (increase batch to reduce zeros)
+        await hydrateSearchResults(limit: 200)
     }
     
     func selectRecentSearch(_ search: String) {
@@ -154,8 +154,8 @@ class SearchViewModel: ObservableObject {
             allStocks = stocks
             searchResults = stocks // Show all stocks by default
             print("✅ Loaded \(stocks.count) stocks from database")
-            // Hydrate initial list with prices (top 50 to keep it snappy)
-            await hydrateSearchResults(limit: 50)
+            // Hydrate initial list with prices (increase batch for better coverage)
+            await hydrateSearchResults(limit: 200)
         } catch {
             print("❌ Error loading all stocks: \(error)")
             allStocks = []
@@ -171,17 +171,21 @@ class SearchViewModel: ObservableObject {
         let symbols = Array(searchResults.prefix(limit)).map { $0.symbol }
         guard !symbols.isEmpty else { return }
         do {
-            let hydrated = try await withThrowingTaskGroup(of: Stock.self) { group in
-                for sym in symbols { group.addTask { try await self.stockDataService.fetchStockData(symbol: sym) } }
-                var out: [Stock] = []
-                for try await s in group { out.append(s) }
-                return out
+            let quotes = try await supabaseService.fetchQuotesDisplayForSymbols(symbols)
+            let updated: [Stock] = searchResults.map { stock in
+                let key = stock.symbol.uppercased()
+                if let q = quotes[key] {
+                    let newPrice = q.price
+                    let newDelta = q.delta ?? 0
+                    let newDeltaPct = q.deltaPercent ?? 0
+                    return Stock(symbol: stock.symbol, companyName: stock.companyName, currentPrice: newPrice, dailyChange: newDelta, dailyChangePercent: newDeltaPct)
+                }
+                return stock
             }
-            let bySymbol = Dictionary(uniqueKeysWithValues: hydrated.map { ($0.symbol, $0) })
-            // Update current searchResults
-            searchResults = searchResults.map { bySymbol[$0.symbol] ?? $0 }
+            searchResults = updated
             if !hasSearched {
-                allStocks = allStocks.map { bySymbol[$0.symbol] ?? $0 }
+                let bySymbol = Dictionary(uniqueKeysWithValues: updated.map { ($0.symbol.uppercased(), $0) })
+                allStocks = allStocks.map { bySymbol[$0.symbol.uppercased()] ?? $0 }
             }
         } catch {
             print("⚠️ Hydration failed: \(error)")

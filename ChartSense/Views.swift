@@ -38,19 +38,26 @@ struct DiscoverView: View {
                     .padding(.bottom, 24)
                     
                     // Dynamic Content
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 24) {
-                            if searchViewModel.isLoading && searchViewModel.searchResults.isEmpty {
-                                ModernDiscoverLoadingView()
-                            } else if searchViewModel.searchResults.isEmpty && !searchText.isEmpty {
-                                ModernEmptySearchView()
-                            } else if !searchViewModel.searchResults.isEmpty {
-                                ModernSearchResultsSection(results: searchViewModel.searchResults)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 24) {
+                                // Invisible anchor at top for programmatic scrolling
+                                Color.clear.frame(height: 0).id("discoverTopAnchor")
+                                if searchViewModel.isLoading && searchViewModel.searchResults.isEmpty {
+                                    ModernDiscoverLoadingView()
+                                } else if searchViewModel.searchResults.isEmpty && !searchText.isEmpty {
+                                    ModernEmptySearchView()
+                                } else if !searchViewModel.searchResults.isEmpty {
+                                    ModernSearchResultsSection(results: searchViewModel.searchResults)
+                                }
+                                // When searchText is empty, show nothing - clean slate
                             }
-                            // When searchText is empty, show nothing - clean slate
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 100) // Tab bar spacing
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 100) // Tab bar spacing
+                        .onChange(of: searchText) { _ in
+                            withAnimation { proxy.scrollTo("discoverTopAnchor", anchor: .top) }
+                        }
                     }
                 }
             }

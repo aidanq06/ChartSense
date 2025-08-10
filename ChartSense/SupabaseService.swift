@@ -402,27 +402,32 @@ class SupabaseService: ObservableObject {
     
     func getWatchlistWithStockData() async throws -> [WatchlistItemWithStock] {
         let watchlistItems = try await getWatchlist()
+        let symbols = watchlistItems.map { $0.symbol }
         var itemsWithStock: [WatchlistItemWithStock] = []
-        
-        for item in watchlistItems {
-            do {
-                let stock = try await fetchStockData(symbol: item.symbol)
-                let itemWithStock = WatchlistItemWithStock(
-                    watchlistItem: item,
-                    stock: stock
-                )
-                itemsWithStock.append(itemWithStock)
-            } catch {
-                print("⚠️ Could not fetch stock data for \(item.symbol): \(error)")
-                // Add item without stock data
-                let itemWithStock = WatchlistItemWithStock(
-                    watchlistItem: item,
-                    stock: nil
-                )
-                itemsWithStock.append(itemWithStock)
+        do {
+            let qMap = try await fetchQuotesDisplayForSymbols(symbols)
+            for item in watchlistItems {
+                let key = item.symbol.uppercased()
+                if let q = qMap[key] {
+                    let stock = Stock(
+                        symbol: item.symbol.uppercased(),
+                        companyName: item.companyName,
+                        currentPrice: q.price,
+                        dailyChange: q.delta ?? 0,
+                        dailyChangePercent: q.deltaPercent ?? 0
+                    )
+                    itemsWithStock.append(WatchlistItemWithStock(watchlistItem: item, stock: stock))
+                } else {
+                    itemsWithStock.append(WatchlistItemWithStock(watchlistItem: item, stock: nil))
+                }
+            }
+        } catch {
+            print("⚠️ Bulk quotes fetch failed, falling back per-symbol: \(error)")
+            for item in watchlistItems {
+                let stock = try? await fetchStockData(symbol: item.symbol)
+                itemsWithStock.append(WatchlistItemWithStock(watchlistItem: item, stock: stock))
             }
         }
-        
         return itemsWithStock
     }
     
@@ -738,8 +743,10 @@ class SupabaseService: ObservableObject {
                 let tsStr = (row["display_ts"] as? String) ?? (row["ts"] as? String) ?? ISO8601DateFormatter().string(from: Date())
                 let ts = ISO8601DateFormatter().date(from: tsStr) ?? Date()
                 let prev = row["previous_close"] as? Double
-                let delta = (prev != nil) ? (price - prev!) : nil
-                let deltaPct = (prev != nil && prev! != 0) ? ((price - prev!) / prev! * 100.0) : nil
+                let deltaServer = row["display_change"] as? Double
+                let deltaPctServer = row["display_change_percent"] as? Double
+                let delta = deltaServer ?? ((prev != nil) ? (price - prev!) : nil)
+                let deltaPct = deltaPctServer ?? ((prev != nil && prev! != 0) ? ((price - prev!) / prev! * 100.0) : nil)
                 return (price, session, delta, deltaPct, ts)
             }
         }
@@ -789,11 +796,46 @@ class SupabaseService: ObservableObject {
         return (price, session, delta, deltaPct, ts)
     }
 
+    // Bulk: fetch quotes_display for many symbols at once for faster hydration
+    func fetchQuotesDisplayForSymbols(_ symbols: [String]) async throws -> [String: (price: Double, delta: Double?, deltaPercent: Double?, ts: Date, session: String)] {
+        guard let supabaseURL = supabaseURL,
+              let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+        let upper = Array(Set(symbols.map { $0.uppercased() })).sorted()
+        guard !upper.isEmpty else { return [:] }
+        let list = upper.joined(separator: ",")
+        let urlString = "\(supabaseURL)/rest/v1/quotes_display?symbol=in.(\(list))"
+        guard let url = URL(string: urlString) else { throw SupabaseError.invalidResponse }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw SupabaseError.invalidResponse }
+        var out: [String: (Double, Double?, Double?, Date, String)] = [:]
+        let fmt = ISO8601DateFormatter()
+        for row in arr {
+            guard let sym = (row["symbol"] as? String)?.uppercased() else { continue }
+            let price = row["display_price"] as? Double ?? row["price"] as? Double ?? 0
+            let session = (row["session"] as? String) ?? "unknown"
+            let tsStr = (row["display_ts"] as? String) ?? (row["ts"] as? String)
+            let ts = (tsStr != nil ? fmt.date(from: tsStr!) : nil) ?? Date()
+            let deltaServer = row["display_change"] as? Double
+            let deltaPctServer = row["display_change_percent"] as? Double
+            let prev = row["previous_close"] as? Double
+            let delta = deltaServer ?? ((prev != nil) ? (price - prev!) : nil)
+            let deltaPct = deltaPctServer ?? ((prev != nil && prev! != 0) ? ((price - prev!) / prev! * 100.0) : nil)
+            out[sym] = (price, delta, deltaPct, ts, session)
+        }
+        return out
+    }
+
     func fetchCandles5m(symbol: String, hoursBack: Int = 24) async throws -> [(Date, Double)] {
         guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
         let fromISO: String = ISO8601DateFormatter().string(from: Date().addingTimeInterval(Double(-hoursBack) * 3600))
         let url = URL(string: "\(supabaseURL)/rest/v1/candles_5m?symbol=eq.\(symbol.uppercased())&ts=gt.\(fromISO)&select=ts,close&order=ts.asc")!
         var req = URLRequest(url: url)
+        // RLS on candles requires authenticated role; use user token when available
+        if let token = self.accessToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
@@ -811,6 +853,7 @@ class SupabaseService: ObservableObject {
         let dayStr = ISO8601DateFormatter().string(from: fromDate).prefix(10)
         let url = URL(string: "\(supabaseURL)/rest/v1/candles_1d?symbol=eq.\(symbol.uppercased())&day=gt.\(dayStr)&select=day,close&order=day.asc")!
         var req = URLRequest(url: url)
+        if let token = self.accessToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200,

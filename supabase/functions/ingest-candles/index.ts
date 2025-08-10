@@ -59,10 +59,11 @@ export default async function handler(req: Request) {
   const { createClient } = await import('npm:@supabase/supabase-js')
   const admin = createClient(supabaseUrl, serviceKey)
 
-  // Build universe from watchlists + baseline
-  const baseline = ['AAPL', 'MSFT', 'SPY']
+  // Build universe from is_baseline=true ∪ watchlist symbols
+  const { data: baseRows } = await admin.from('symbols').select('symbol').eq('is_baseline', true).limit(500)
+  const baseline = baseRows?.map((r: any) => r.symbol as string) ?? ['AAPL', 'MSFT', 'SPY']
   const { data: wlItems } = await admin.from('watchlist_items').select('symbol')
-  const symbols = Array.from(new Set([...(wlItems?.map(w => w.symbol) ?? []), ...baseline]))
+  const symbols = Array.from(new Set([...(wlItems?.map((w: any) => w.symbol as string) ?? []), ...baseline]))
 
   let updated5m = 0
   let updated1d = 0

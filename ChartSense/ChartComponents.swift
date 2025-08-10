@@ -121,8 +121,11 @@ enum ChartRange: String, CaseIterable, Identifiable {
     case oneDay = "1D"
     case oneWeek = "1W"
     case oneMonth = "1M"
+    case threeMonths = "3M"
+    case ytd = "YTD"
     case oneYear = "1Y"
-    case all = "All"
+    case fiveYears = "5Y"
+    case max = "Max"
     var id: String { rawValue }
     var display: String { rawValue }
 }
@@ -230,8 +233,18 @@ struct UltraCleanChartTab: View {
                     series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 7)
                 case .oneMonth:
                     series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 30)
-                case .oneYear, .all:
-                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: range == .oneYear ? 365 : 365 * 5)
+                case .threeMonths:
+                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 90)
+                case .ytd:
+                    // Fetch 1D candles since start of year
+                    let days = daysSinceStartOfYear()
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: days)
+                case .oneYear:
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365)
+                case .fiveYears:
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365 * 5)
+                case .max:
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365 * 15)
                 }
                 let pts = series.map { ChartPoint(date: $0.0, price: $0.1) }
                 let downsampled = downsample(points: pts, targetCount: 240)
@@ -266,8 +279,11 @@ struct UltraCleanChartTab: View {
         case .oneDay: count = 160
         case .oneWeek: count = 220
         case .oneMonth: count = 260
-        case .oneYear: count = 300
-        case .all: count = 240
+        case .threeMonths: count = 300
+        case .ytd: count = 300
+        case .oneYear: count = 320
+        case .fiveYears: count = 340
+        case .max: count = 360
         }
 
         let base = max(stock.currentPrice, 1)
@@ -283,14 +299,25 @@ struct UltraCleanChartTab: View {
             case .oneDay: t = -TimeInterval(count - i) * 60 * 3
             case .oneWeek: t = -TimeInterval(count - i) * 60 * 20
             case .oneMonth: t = -TimeInterval(count - i) * 60 * 60 * 3
+            case .threeMonths: t = -TimeInterval(count - i) * 60 * 60 * 6
+            case .ytd: t = -TimeInterval(count - i) * 60 * 60 * 24
             case .oneYear: t = -TimeInterval(count - i) * 60 * 60 * 24
-            case .all: t = -TimeInterval(count - i) * 60 * 60 * 24 * 3
+            case .fiveYears: t = -TimeInterval(count - i) * 60 * 60 * 24 * 3
+            case .max: t = -TimeInterval(count - i) * 60 * 60 * 24 * 7
             }
             let noise = Double.random(in: -volatility...volatility)
             price = max(0.01, price + noise + drift)
             pts.append(ChartPoint(date: now.addingTimeInterval(t), price: price))
         }
         return pts
+    }
+
+    private func daysSinceStartOfYear() -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let start = cal.date(from: cal.dateComponents([.year], from: now)) ?? now
+        let days = cal.dateComponents([.day], from: start, to: now).day ?? 180
+        return max(1, days)
     }
 
     private func downsample(points: [ChartPoint], targetCount: Int) -> [ChartPoint] {
@@ -319,32 +346,35 @@ struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(ChartRange.allCases) { r in
-                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { range = r } }) {
-                    let isSelected = (range == r)
-                    let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
-                    let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
-                    let glow = primary.opacity(0.25)
-                    let backgroundStyle: AnyShapeStyle = isSelected
-                        ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
-                        : AnyShapeStyle(primary.opacity(0.10))
-
-                    Text(r.display)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(isSelected ? .white : primary)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule().fill(backgroundStyle)
-                        )
-                        .overlay(
-                            Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1)
-                        )
-                        .shadow(color: primary.opacity(isSelected ? 0.28 : 0.0), radius: isSelected ? 12 : 0, x: 0, y: 6)
-                        .modifier(SelectedGlow(isSelected: isSelected, primary: primary, secondary: secondary))
+        // Two-row grid for better layout on small screens
+        let rows: [[ChartRange]] = [
+            [.oneDay, .oneWeek, .oneMonth, .threeMonths],
+            [.ytd, .oneYear, .fiveYears, .max]
+        ]
+        VStack(spacing: 10) {
+            ForEach(0..<rows.count, id: \.self) { rowIdx in
+                HStack(spacing: 8) {
+                    ForEach(rows[rowIdx], id: \.self) { r in
+                        let isSelected = (range == r)
+                        let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
+                        let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                        let backgroundStyle: AnyShapeStyle = isSelected
+                            ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
+                            : AnyShapeStyle(primary.opacity(0.10))
+                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { range = r } }) {
+                            Text(r.display)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(isSelected ? .white : primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(backgroundStyle))
+                                .overlay(Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1))
+                                .shadow(color: primary.opacity(isSelected ? 0.20 : 0.0), radius: isSelected ? 8 : 0, x: 0, y: 4)
+                                .modifier(SelectedGlow(isSelected: isSelected, primary: primary, secondary: secondary))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
     }

@@ -54,7 +54,7 @@ function pickLatest(a: Quote, b: Quote): Quote {
   return a ?? b
 }
 
-type YahooTriplet = { regular: Quote; post: Quote; pre: Quote }
+type YahooTriplet = { regular: Quote; post: Quote; pre: Quote; prevClose: number | null }
 
 async function fetchYahooTriplet(symbol: string): Promise<YahooTriplet> {
   try {
@@ -63,19 +63,20 @@ async function fetchYahooTriplet(symbol: string): Promise<YahooTriplet> {
     if (!res.ok) throw new Error(String(res.status))
     const data: any = await res.json()
     const q = data?.quoteResponse?.result?.[0]
-    if (!q) return { regular: null, post: null, pre: null }
+    if (!q) return { regular: null, post: null, pre: null, prevClose: null }
     const postPrice = typeof q.postMarketPrice === 'number' && isFinite(q.postMarketPrice) ? q.postMarketPrice : null
     const postTime = typeof q.postMarketTime === 'number' && q.postMarketTime > 0 ? new Date(q.postMarketTime * 1000).toISOString() : null
     const prePrice = typeof q.preMarketPrice === 'number' && isFinite(q.preMarketPrice) ? q.preMarketPrice : null
     const preTime = typeof q.preMarketTime === 'number' && q.preMarketTime > 0 ? new Date(q.preMarketTime * 1000).toISOString() : null
     const regPrice = typeof q.regularMarketPrice === 'number' && isFinite(q.regularMarketPrice) ? q.regularMarketPrice : null
     const regTime = typeof q.regularMarketTime === 'number' && q.regularMarketTime > 0 ? new Date(q.regularMarketTime * 1000).toISOString() : null
+    const prevClose = typeof q.regularMarketPreviousClose === 'number' && isFinite(q.regularMarketPreviousClose) ? q.regularMarketPreviousClose : null
     const post: Quote = postPrice && postTime ? { price: postPrice, tsIso: postTime } : null
     const pre: Quote = prePrice && preTime ? { price: prePrice, tsIso: preTime } : null
     const reg: Quote = regPrice && regTime ? { price: regPrice, tsIso: regTime } : null
-    return { regular: reg, post, pre }
+    return { regular: reg, post, pre, prevClose }
   } catch (_) {
-    return { regular: null, post: null, pre: null }
+    return { regular: null, post: null, pre: null, prevClose: null }
   }
 }
 
@@ -234,6 +235,7 @@ export default async function handler(req: Request) {
           extended_ts: post?.tsIso ?? null,
           premarket_price: pre?.price ?? null,
           premarket_ts: pre?.tsIso ?? null,
+          previous_close: ytri.prevClose ?? null,
           price_source: top?.name ?? null,
           extended_source: post ? 'yahoo_post' : null,
           premarket_source: pre ? 'yahoo_pre' : null,
@@ -255,7 +257,7 @@ export default async function handler(req: Request) {
       open: null,
       high: null,
       low: null,
-      previous_close: null,
+      previous_close: r.previous_close ?? null,
       change: null,
       change_percent: null,
       volume: null,
@@ -264,6 +266,9 @@ export default async function handler(req: Request) {
       extended_ts: r.extended_ts,
       price_source: r.price_source,
       extended_source: r.extended_source,
+      premarket_price: r.premarket_price ?? null,
+      premarket_ts: r.premarket_ts ?? null,
+      premarket_source: r.premarket_source ?? null,
       session: r.session,
     })
   }
