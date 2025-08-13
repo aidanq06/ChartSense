@@ -67,6 +67,7 @@ export default async function handler(req: Request) {
 
   let updated5m = 0
   let updated1d = 0
+  let updated1h = 0
 
   for (const symbol of symbols) {
     try {
@@ -102,6 +103,24 @@ export default async function handler(req: Request) {
       })
       updated1d += rows1d.length
 
+      // 1h: last 1 month (for 1W/1M charting)
+      const hourly = await fetchYahooChart(symbol, '1h', '1mo', true)
+      const rows1h = hourly.map(c => ({
+        symbol,
+        ts: new Date(c.t * 1000).toISOString(),
+        open: c.o,
+        high: c.h,
+        low: c.l,
+        close: c.c,
+        volume: c.v,
+      }))
+      if (rows1h.length > 0) {
+        await chunkedUpsert(rows1h, 400, async (chunk) => {
+          await admin.from('candles_1h').upsert(chunk)
+        })
+        updated1h += rows1h.length
+      }
+
       // Gentle pacing
       await new Promise((r) => setTimeout(r, 150))
     } catch (e) {
@@ -109,7 +128,7 @@ export default async function handler(req: Request) {
     }
   }
 
-  return json({ updated_5m: updated5m, updated_1d: updated1d, symbols: symbols.length })
+  return json({ updated_5m: updated5m, updated_1d: updated1d, updated_1h: updated1h, symbols: symbols.length })
 }
 
 // @ts-ignore

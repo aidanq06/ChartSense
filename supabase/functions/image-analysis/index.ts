@@ -1,6 +1,6 @@
-// Supabase Edge Function: ai-chat
-// Enforces daily AI chat quota and returns a Gemini-generated response.
-// Deploy with: supabase functions deploy ai-chat
+// Supabase Edge Function: image-analysis
+// Enforces daily image analysis quota and returns a Gemini vision analysis.
+// Deploy with: supabase functions deploy image-analysis
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 
@@ -13,32 +13,30 @@ function json(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', ...corsHeaders }, ...init })
 }
 
-const DAILY_FREE = 5
+const DAILY_FREE = 1
 const DAILY_PREMIUM = 200
 const GEMINI_MODEL = 'gemini-1.5-flash'
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!
 
 const SYSTEM_PROMPT = `
-You are ChartSense AI, a financial analysis assistant. Provide structured, educational insights.
-Important rules:
-- Do NOT give personalized financial advice. Include a brief educational disclaimer.
-- Be concise, factual, and cautious; avoid hallucinations.
-- If data may be stale, say so.
-- Use clear section headers and bullet points: Thesis, Key Drivers, Risks, Technicals, Valuation, What to Watch, Next Steps.
-- Keep responses under ~300-500 words unless asked to go deeper.
+You are ChartSense AI. Analyze a financial chart image.
+Rules:
+- Educational only; not financial advice. Include a short disclaimer.
+- Provide sections: Pattern, Trend, Support/Resistance, Indicators (RSI/MACD/MAs), Risks, Levels (Entry/Exit/Invalidation), What to Watch.
+- Be concise, markdown formatted, avoid speculation.
 `
 
-async function callGeminiText(message: string): Promise<string> {
+async function callGeminiVision(imageBase64: string, mimeType: string, userPrompt?: string): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
+  const parts: any[] = [
+    { text: SYSTEM_PROMPT },
+    { inline_data: { mime_type: mimeType, data: imageBase64 } }
+  ]
+  if (userPrompt) parts.push({ text: userPrompt })
+
   const body = {
-    contents: [
-      { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-      { role: 'user', parts: [{ text: message }] }
-    ],
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 1024
-    }
+    contents: [{ role: 'user', parts }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
   }
 
   const resp = await fetch(url, {
@@ -46,18 +44,16 @@ async function callGeminiText(message: string): Promise<string> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
   })
-
   if (!resp.ok) {
     const errText = await resp.text().catch(() => '')
     throw new Error(`Gemini error: ${resp.status} ${errText}`)
   }
-
   const data = await resp.json()
-  const reply =
+  const out =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ??
     data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-    'Sorry, I could not generate a response.'
-  return reply
+    'Sorry, I could not analyze the image.'
+  return out
 }
 
 export default async function handler(req: Request) {
@@ -75,7 +71,14 @@ export default async function handler(req: Request) {
   const { data: { user }, error: userErr } = await supabase.auth.getUser()
   if (userErr || !user) return json({ error: 'unauthorized' }, { status: 401 })
 
-  // Determine subscription tier
+  const { image_base64, mime_type, prompt } = await req.json().catch(() => ({})) as { image_base64?: string; mime_type?: string; prompt?: string }
+  if (!image_base64 || typeof image_base64 !== 'string') return json({ error: 'missing_image' }, { status: 400 })
+  const mime = typeof mime_type === 'string' && mime_type.startsWith('image/') ? mime_type : 'image/jpeg'
+
+  // Support data URLs: strip the prefix if present
+  const cleanedBase64 = image_base64.includes(',') ? image_base64.split(',').pop()! : image_base64
+
+  // Determine subscription and enforce limits
   const { data: sub } = await supabase.from('subscriptions')
     .select('tier, status, expires_at')
     .eq('user_id', user.id)
@@ -87,16 +90,12 @@ export default async function handler(req: Request) {
   const active = sub && sub.status === 'active' && (!sub.expires_at || new Date(sub.expires_at) > now)
   const limit = active ? DAILY_PREMIUM : DAILY_FREE
 
-  // Increment usage atomically
-  const { data: ok, error: rpcErr } = await supabaseAdmin.rpc('increment_ai_chat_usage', { p_user_id: user.id, p_limit: limit })
+  const { data: ok, error: rpcErr } = await supabaseAdmin.rpc('increment_image_analysis_usage', { p_user_id: user.id, p_limit: limit })
   if (rpcErr || ok !== true) return json({ error: 'daily_limit_reached' }, { status: 429 })
 
-  const { message } = await req.json().catch(() => ({ message: '' })) as { message?: string }
-  if (!message || typeof message !== 'string') return json({ error: 'invalid_message' }, { status: 400 })
-
   try {
-    const reply = await callGeminiText(message)
-    return json({ reply })
+    const analysis = await callGeminiVision(cleanedBase64, mime, prompt)
+    return json({ analysis })
   } catch (e: any) {
     return json({ error: 'llm_error', details: e?.message ?? String(e) }, { status: 502 })
   }

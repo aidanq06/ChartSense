@@ -1579,250 +1579,26 @@ struct SentimentFocusedStockCard: View {
             impactFeedback.impactOccurred()
             onTap()
         }) {
-            ZStack {
-                // Clean background with subtle design
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-                    .overlay(
-                        Group {
-                            if !themeManager.isDarkMode {
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.blue.opacity(isHovered ? 0.3 : 0.1),
-                                                Color.purple.opacity(isHovered ? 0.3 : 0.1)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: isHovered ? 2 : 1
-                                    )
-                            }
-                        }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .shadow(
-                        color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.05),
-                        radius: isHovered ? 15 : 8,
-                        x: 0,
-                        y: isHovered ? 8 : 4
-                    )
-                    .scaleEffect(isHovered ? 1.02 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: isHovered)
-                
-                // Beautiful shimmer effect when card appears
-                if animateCard {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    Color.white.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .offset(x: shimmerOffset)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                }
-                
-                VStack(spacing: 0) {
-                    // Header with ticker and price
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(stock.symbol)
-                                .font(.system(size: 24, weight: .bold, design: .default))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                .opacity(animateCard ? 1.0 : 0.0)
-                                .offset(y: animateCard ? 0 : 10)
-                                .animation(.easeOut(duration: 0.15).delay(0.02), value: animateCard)
-                            
-                            Text(stock.companyName)
-                                .font(.system(size: 14, weight: .medium, design: .default))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                .lineLimit(1)
-                                .opacity(animateCard ? 1.0 : 0.0)
-                                .offset(y: animateCard ? 0 : 8)
-                                .animation(.easeOut(duration: 0.15).delay(0.03), value: animateCard)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("$\(stock.currentPrice, specifier: "%.2f")")
-                                .font(.system(size: 22, weight: .bold, design: .default))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                .opacity(animateCard ? 1.0 : 0.0)
-                                .offset(y: animateCard ? 0 : 10)
-                                .animation(.easeOut(duration: 0.15).delay(0.04), value: animateCard)
-                            
-                            HStack(spacing: 4) {
-                                Image(systemName: stock.dailyChangePercent >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(stock.dailyChangePercent >= 0 ? Color.green : Color.red)
-                                
-                                Text("\(stock.dailyChangePercent, specifier: "%.2f")%")
-                                    .font(.system(size: 16, weight: .semibold, design: .default))
-                                    .foregroundColor(stock.dailyChangePercent >= 0 ? Color.green : Color.red)
-                            }
-                            .opacity(animateCard ? 1.0 : 0.0)
-                            .offset(y: animateCard ? 0 : 8)
-                            .animation(.easeOut(duration: 0.15).delay(0.05), value: animateCard)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                    
-                    // Sentiment Analysis Section (Emphasized)
-                    VStack(spacing: 16) {
-                        // Main sentiment indicator
-                        HStack {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("SENTIMENT ANALYSIS")
-                                    .font(.system(size: 10, weight: .bold, design: .default))
-                                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                    .tracking(1.0)
-                                    .opacity(animateCard ? 1.0 : 0.0)
-                                    .offset(y: animateCard ? 0 : 5)
-                                    .animation(.easeOut(duration: 0.6).delay(0.7), value: animateCard)
-                                
-        HStack(spacing: 12) {
-                                    // Sentiment score
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("\(getSentimentScore())")
-                                            .font(.system(size: 28, weight: .bold, design: .default))
-                                            .foregroundColor(sentimentColor)
-                                        
-                                        Text(getSentimentLabel())
-                                            .font(.system(size: 14, weight: .semibold, design: .default))
-                                            .foregroundColor(sentimentColor)
-                                    }
-                                    
-                                    // Sentiment confidence
-            VStack(alignment: .leading, spacing: 4) {
-                                        Text("\(getConfidenceScore())%")
-                                            .font(.system(size: 16, weight: .bold, design: .default))
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                        
-                                        Text("Confidence")
-                                            .font(.system(size: 12, weight: .medium, design: .default))
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            }
-            
-            Spacer()
-            
-                                    // Sentiment trend
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: getSentimentTrendIcon())
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundColor(getSentimentTrendColor())
-                                            
-                                            Text(getSentimentTrendText())
-                                                .font(.system(size: 14, weight: .semibold, design: .default))
-                                                .foregroundColor(getSentimentTrendColor())
-                                        }
-                                        
-                                        Text("vs Yesterday")
-                                            .font(.system(size: 12, weight: .medium, design: .default))
-                                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                    }
-                                }
-                }
-                
-                Spacer()
-                        }
-                        
-                        // Sentiment breakdown
-                        HStack(spacing: 16) {
-                            SentimentBreakdownItem(
-                                title: "Social",
-                                score: getSocialScore(),
-                                color: Color.blue
-                            )
-                            .opacity(animateCard ? 1.0 : 0.0)
-                            .offset(y: animateCard ? 0 : 10)
-                            .animation(.easeOut(duration: 0.6).delay(0.8), value: animateCard)
-                            
-                            SentimentBreakdownItem(
-                                title: "News",
-                                score: getNewsScore(),
-                                color: Color.purple
-                            )
-                            .opacity(animateCard ? 1.0 : 0.0)
-                            .offset(y: animateCard ? 0 : 10)
-                            .animation(.easeOut(duration: 0.6).delay(0.9), value: animateCard)
-                            
-                            SentimentBreakdownItem(
-                                title: "Technical",
-                                score: getTechnicalScore(),
-                                color: Color.orange
-                            )
-                            .opacity(animateCard ? 1.0 : 0.0)
-                            .offset(y: animateCard ? 0 : 10)
-                            .animation(.easeOut(duration: 0.6).delay(1.0), value: animateCard)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-                    .opacity(animateCard ? 1.0 : 0.0)
-                    .offset(y: animateCard ? 0 : 15)
-                    .animation(.easeOut(duration: 0.6).delay(0.6), value: animateCard)
-                    
-                    // Mini sparkline (smaller, less emphasized)
-                    CustomSparklineView(data: stock.priceHistory)
-                        .frame(height: 40)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 16)
-                        .opacity(animateSparkline ? 1.0 : 0.0)
-                        .scaleEffect(animateSparkline ? 1.0 : 0.8)
-                        .animation(.easeOut(duration: 0.6).delay(0.8), value: animateSparkline)
-                    
-                    // AI insight preview
-            HStack {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color.purple)
-                        
-                        Text("AI: \(getInsightPreview())")
-                            .font(.system(size: 12, weight: .medium, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(1)
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-            }
+            WatchlistTickerItemView(
+                stock: stock,
+                sentiment: SentimentService.shared.getSentiment(for: stock.symbol),
+                onTap: onTap
+            )
+            .padding(12)
+            .background(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+            )
+            .cornerRadius(16)
+            .shadow(
+                color: themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color,
+                radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
+                x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
+                y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .onAppear {
-            // Trigger shimmer effect after card appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                animateCard = true
-                
-                // Animate shimmer
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    shimmerOffset = 200
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    shimmerOffset = -200
-                }
-                
-                // Animate sparkline
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        animateSparkline = true
-                    }
-                }
-            }
-        }
     }
     
     // Sentiment helper functions

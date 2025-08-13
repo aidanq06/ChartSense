@@ -419,7 +419,7 @@ struct ModernWatchlistView: View {
             let item = itemWithStock.watchlistItem
             let stock = itemWithStock.stock
             
-            let matchesSearch = searchText.isEmpty || 
+            let matchesSearch = searchText.isEmpty ||
                 item.symbol.localizedCaseInsensitiveContains(searchText) ||
                 item.companyName.localizedCaseInsensitiveContains(searchText)
             
@@ -1193,7 +1193,7 @@ struct ModernAddStockRow: View {
     }
     
     var body: some View {
-        Button(action: { 
+        Button(action: {
             print("🎯 WATCHLIST ADD BUTTON TAPPED for \(stock.symbol)!")
             
             // Add haptic feedback
@@ -1288,8 +1288,8 @@ struct ModernAddStockRow: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(themeManager.isDarkMode ? 
-                        Color(hex: "1A1A1A") : 
+                    .fill(themeManager.isDarkMode ?
+                        Color(hex: "1A1A1A") :
                         Color.white)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -1299,4 +1299,4 @@ struct ModernAddStockRow: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-} 
+}

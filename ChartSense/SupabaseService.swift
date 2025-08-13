@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Security
+import UIKit
 
 // MARK: - Supabase Service
 enum SupabaseError: Error, LocalizedError {
@@ -702,7 +703,8 @@ class SupabaseService: ObservableObject {
                 throw SupabaseError.networkError
             }
             
-            if functionHttpResponse.statusCode == 200 {
+            switch functionHttpResponse.statusCode {
+            case 200:
                 if let responseJson = try JSONSerialization.jsonObject(with: functionData) as? [String: Any],
                    let content = (responseJson["reply"] as? String) ?? (responseJson["content"] as? String) {
                     
@@ -714,11 +716,54 @@ class SupabaseService: ObservableObject {
                     print("✅ AI message sent successfully")
                     return aiMessage
                 }
+                // If we couldn't parse a content field, treat as invalid
+                throw SupabaseError.invalidResponse
+            case 401:
+                throw SupabaseError.notAuthenticated
+            case 429:
+                throw SupabaseError.rateLimitExceeded
+            default:
+                if let responseText = String(data: functionData, encoding: .utf8) {
+                    throw SupabaseError.serverError("AI error (\(functionHttpResponse.statusCode)): \(responseText)")
+                } else {
+                    throw SupabaseError.invalidResponse
+                }
             }
-            
-            throw SupabaseError.invalidResponse
         } catch {
             print("❌ Error sending AI message: \(error)")
+            throw error
+        }
+    }
+
+    // Overload with optional image (tracked as 1 image/day for free users)
+    func sendAIMessage(message: String, image: UIImage?) async throws -> ChatMessage {
+        guard currentUser?.id != nil else { throw SupabaseError.notAuthenticated }
+        guard let supabaseURL = supabaseURL else { throw SupabaseError.networkError }
+        do {
+            let functionURL = URL(string: "\(supabaseURL)/functions/v1/ai-chat")!
+            var functionRequest = URLRequest(url: functionURL)
+            functionRequest.httpMethod = "POST"
+            functionRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let accessToken = self.accessToken { functionRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
+
+            var body: [String: Any] = ["message": message]
+            if let image = image, let data = image.jpegData(compressionQuality: 0.85) {
+                let b64 = data.base64EncodedString()
+                body["image_data_url"] = "data:image/jpeg;base64,\(b64)"
+            }
+            functionRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            let (functionData, functionResponse) = try await URLSession.shared.data(for: functionRequest)
+            guard let http = functionResponse as? HTTPURLResponse else { throw SupabaseError.networkError }
+            if http.statusCode == 200,
+               let responseJson = try JSONSerialization.jsonObject(with: functionData) as? [String: Any],
+               let content = (responseJson["reply"] as? String) ?? (responseJson["content"] as? String) {
+                return ChatMessage(content: content, isUser: false)
+            }
+            if let body = String(data: functionData, encoding: .utf8) { print("❌ AI error: \(http.statusCode) - \(body)") }
+            throw SupabaseError.invalidResponse
+        } catch {
+            print("❌ Error sending AI message with image: \(error)")
             throw error
         }
     }
@@ -835,6 +880,24 @@ class SupabaseService: ObservableObject {
         let url = URL(string: "\(supabaseURL)/rest/v1/candles_5m?symbol=eq.\(symbol.uppercased())&ts=gt.\(fromISO)&select=ts,close&order=ts.asc")!
         var req = URLRequest(url: url)
         // RLS on candles requires authenticated role; use user token when available
+        if let token = self.accessToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200,
+              let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw SupabaseError.invalidResponse }
+        let iso = ISO8601DateFormatter()
+        return arr.compactMap { row in
+            guard let tsStr = row["ts"] as? String, let close = row["close"] as? Double, let d = iso.date(from: tsStr) else { return nil }
+            return (d, close)
+        }
+    }
+
+    // Hourly candles for 1W/1M
+    func fetchCandles1h(symbol: String, hoursBack: Int = 24 * 31) async throws -> [(Date, Double)] {
+        guard let supabaseURL = supabaseURL, let supabaseAnonKey = supabaseAnonKey else { throw SupabaseError.networkError }
+        let fromISO: String = ISO8601DateFormatter().string(from: Date().addingTimeInterval(Double(-hoursBack) * 3600))
+        let url = URL(string: "\(supabaseURL)/rest/v1/candles_1h?symbol=eq.\(symbol.uppercased())&ts=gt.\(fromISO)&select=ts,close&order=ts.asc")!
+        var req = URLRequest(url: url)
         if let token = self.accessToken { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         req.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         let (data, resp) = try await URLSession.shared.data(for: req)

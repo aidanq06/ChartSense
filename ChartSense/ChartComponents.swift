@@ -119,14 +119,15 @@ struct ChartLoadingView: View {
 // MARK: - Chart Range
 enum ChartRange: String, Identifiable, CaseIterable {
     case oneDay = "1D"
-    case oneWeek = "1W"
+    case fiveDays = "5D"
     case oneMonth = "1M"
     case ytd = "YTD"
     case oneYear = "1Y"
-    case max = "Max"
+    
     var id: String { rawValue }
     var display: String { rawValue }
-    static var allCases: [ChartRange] { [.oneDay, .oneWeek, .oneMonth, .ytd, .oneYear, .max] }
+    
+    static var allCases: [ChartRange] { [.oneDay, .fiveDays, .oneMonth, .ytd, .oneYear] }
 }
 
 // MARK: - Chart Data Point
@@ -201,7 +202,9 @@ struct UltraCleanChartTab: View {
                 isScrubbing: $isScrubbing,
                 scrubIndex: $scrubIndex,
                 baseline: baseline,
-                showBaseline: (range == .oneDay),
+                showBaseline: (range == .oneDay && !isLoading && points.count > 1),
+                useFullDate: (range == .ytd || range == .oneYear),
+                compressGaps: (range == .fiveDays),
                 onScrubBegan: {
                     Haptics.light()
                     onScrubbingStateChanged?(true)
@@ -238,6 +241,9 @@ struct UltraCleanChartTab: View {
 
     private func loadData(animated: Bool) {
         fadeIn = false
+        Task { @MainActor in
+            isLoading = true
+        }
         Task.detached(priority: .userInitiated) {
             do {
                 let svc = SupabaseService.shared
@@ -245,40 +251,44 @@ struct UltraCleanChartTab: View {
                 switch range {
                 case .oneDay:
                     series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24)
-                case .oneWeek:
-                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 7)
+                case .fiveDays:
+                    // 5D view: 5-minute candles for the last 5 days
+                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 5)
                 case .oneMonth:
-                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 30)
+                    // 1M view: daily candles for ~31 days (former 3M source constrained to 1M)
+                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 31)
                 case .ytd:
                     // Fetch 1D candles since start of year
                     let days = daysSinceStartOfYear()
                     series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: days)
                 case .oneYear:
+                    // Use 1-day candles for 1Y
                     series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365)
-                case .max:
-                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365 * 15)
                 }
-                let pts = series.map { ChartPoint(date: $0.0, price: $0.1) }
-                let downsampled = downsample(points: pts, targetCount: 240)
+                
+                let chartPoints = series.map { ChartPoint(date: $0.0, price: $0.1) }
+                
                 await MainActor.run {
-                    self.points = downsampled
-                    self.scrubIndex = nil
-                    self.isScrubbing = false
-                    self.fadeIn = true
-                    self.drawProgress = 0.0
-                    withAnimation(.easeInOut(duration: 0.9)) { self.drawProgress = 1.0 }
+                    self.points = chartPoints
+                    self.isLoading = false
+                    if animated {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            self.fadeIn = true
+                        }
+                        // Animate chart drawing
+                        withAnimation(.easeOut(duration: 0.8)) {
+                            self.drawProgress = 1.0
+                        }
+                    } else {
+                        self.fadeIn = true
+                        self.drawProgress = 1.0
+                    }
                 }
             } catch {
-                // Fallback to generated if Supabase fails
-                let generated = generatePoints(for: stock, range: range)
-                let downsampled = downsample(points: generated, targetCount: 240)
+                print("❌ Error loading chart data: \(error)")
                 await MainActor.run {
-                    self.points = downsampled
-                    self.scrubIndex = nil
-                    self.isScrubbing = false
+                    self.isLoading = false
                     self.fadeIn = true
-                    self.drawProgress = 0.0
-                    withAnimation(.easeInOut(duration: 0.9)) { self.drawProgress = 1.0 }
                 }
             }
         }
@@ -289,11 +299,10 @@ struct UltraCleanChartTab: View {
         let count: Int
         switch range {
         case .oneDay: count = 160
-        case .oneWeek: count = 220
+        case .fiveDays: count = 220
         case .oneMonth: count = 260
         case .ytd: count = 300
         case .oneYear: count = 320
-        case .max: count = 360
         }
 
         let base = max(stock.currentPrice, 1)
@@ -307,11 +316,10 @@ struct UltraCleanChartTab: View {
             let t: TimeInterval
             switch range {
             case .oneDay: t = -TimeInterval(count - i) * 60 * 3
-            case .oneWeek: t = -TimeInterval(count - i) * 60 * 20
+            case .fiveDays: t = -TimeInterval(count - i) * 60 * 20
             case .oneMonth: t = -TimeInterval(count - i) * 60 * 60 * 3
             case .ytd: t = -TimeInterval(count - i) * 60 * 60 * 24
             case .oneYear: t = -TimeInterval(count - i) * 60 * 60 * 24
-            case .max: t = -TimeInterval(count - i) * 60 * 60 * 24 * 7
             }
             let noise = Double.random(in: -volatility...volatility)
             price = max(0.01, price + noise + drift)
@@ -349,55 +357,47 @@ struct UltraCleanChartTab: View {
     }
 }
 
-// MARK: - Range Selector (single-row, scrollable pills)
+// MARK: - Range Selector (single-row, premium, uniform)
 struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
-    @Namespace private var selectionNamespace
     var body: some View {
         let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
         let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
         GeometryReader { geo in
             let count = ChartRange.allCases.count
             let spacing: CGFloat = 12
-            let height: CGFloat = 32
+            let height: CGFloat = 40
             let totalSpacing = spacing * CGFloat(max(0, count - 1))
-            let buttonWidth = max(44, floor((geo.size.width - totalSpacing) / CGFloat(count)))
+            let buttonWidth = max(62, floor((geo.size.width - totalSpacing) / CGFloat(count)))
             HStack(spacing: spacing) {
                 ForEach(ChartRange.allCases, id: \.self) { r in
                     let isSelected = (range == r)
-                    Button(action: {
-                        Haptics.selection()
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { range = r }
-                    }) {
+                    Button(action: { Haptics.selection(); withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) { range = r } }) {
                         ZStack {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
-                                    .matchedGeometryEffect(id: "timeframe_selection", in: selectionNamespace)
-                                    .shadow(color: primary.opacity(0.20), radius: 6, x: 0, y: 3)
-                            } else {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(primary.opacity(0.10))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .stroke(primary.opacity(0.14), lineWidth: 1)
-                                    )
-                            }
+                            let shapeFill: AnyShapeStyle = isSelected
+                                ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
+                                : AnyShapeStyle(primary.opacity(0.10))
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(shapeFill)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(isSelected ? Color.clear : primary.opacity(0.15), lineWidth: 1)
+                                )
+                                .shadow(color: primary.opacity(isSelected ? 0.22 : 0), radius: isSelected ? 10 : 0, x: 0, y: 5)
                             Text(r.display)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: 13.5, weight: .semibold))
                                 .foregroundColor(isSelected ? .white : primary)
                         }
                     }
                     .buttonStyle(.plain)
                     .frame(width: buttonWidth, height: height)
-                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             }
-            .frame(width: geo.size.width, height: height, alignment: .center)
+            .frame(width: geo.size.width, height: height)
         }
-        .frame(height: 40)
-        .padding(.vertical, 0)
+        .frame(height: 44)
     }
 }
 
@@ -433,6 +433,8 @@ private struct UltraCleanChart: View {
     @Binding var scrubIndex: Int?
     let baseline: Double
     let showBaseline: Bool
+    let useFullDate: Bool
+    let compressGaps: Bool
     var onScrubBegan: () -> Void = {}
     var onScrubEnded: () -> Void = {}
     var onCrossBaseline: (Bool) -> Void = { _ in }
@@ -442,7 +444,7 @@ private struct UltraCleanChart: View {
     var body: some View {
         GeometryReader { geo in
             let frame = geo.frame(in: .local)
-            let normalized = normalize(points: points, in: frame.size)
+            let normalized = compressGaps ? normalizeCompressed(points: points, in: frame.size) : normalize(points: points, in: frame.size)
             let baselineY = (normalized.map { $0.y }.max() ?? frame.height) * 0.92
             let areaPoints: [CGPoint] = {
                 guard normalized.count > 1 else { return [] }
@@ -524,7 +526,7 @@ private struct UltraCleanChart: View {
                     // Time label (no popup tooltip)
                     if idx < points.count {
                         let date = points[idx].date
-                        UnderCursorTimeLabel(date: date)
+                        UnderCursorTimeLabel(date: date, useFullDate: useFullDate)
                             .modifier(UnderCursorPositionModifier(x: pt.x, containerWidth: frame.width, spacing: 6, avoidLineOverlap: true))
                             .position(x: pt.x, y: -6)
                     }
@@ -562,6 +564,24 @@ private struct UltraCleanChart: View {
         let dt = lastDate.timeIntervalSince(firstDate)
         return points.map { pt in
             let x = CGFloat(pt.date.timeIntervalSince(firstDate) / dt) * size.width
+            let yNorm = (pt.price - lo) / max(hi - lo, 0.0001)
+            let y = size.height - CGFloat(yNorm) * size.height
+            return CGPoint(x: x, y: y)
+        }
+    }
+
+    // Compress time gaps: map trading-session-sequenced points to uniform x spacing
+    private func normalizeCompressed(points: [ChartPoint], in size: CGSize) -> [CGPoint] {
+        guard !points.isEmpty else { return [] }
+        let minPrice = points.map { $0.price }.min() ?? 0
+        let maxPrice = points.map { $0.price }.max() ?? 1
+        let pad = (maxPrice - minPrice) * 0.06
+        let lo = minPrice - pad
+        let hi = maxPrice + pad
+        let n = points.count
+        guard n > 1 else { return [] }
+        return points.enumerated().map { (idx, pt) in
+            let x = CGFloat(idx) / CGFloat(n - 1) * size.width
             let yNorm = (pt.price - lo) / max(hi - lo, 0.0001)
             let y = size.height - CGFloat(yNorm) * size.height
             return CGPoint(x: x, y: y)
@@ -649,11 +669,12 @@ private struct WidthPreferenceKey: PreferenceKey {
 // MARK: - Under Cursor Time Label
 private struct UnderCursorTimeLabel: View {
     let date: Date
+    var useFullDate: Bool = false
     @StateObject private var themeManager = ThemeManager.shared
     var body: some View {
         let bg = themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground
         let border = themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border
-        Text(shortTime(date))
+        Text(useFullDate ? fullDate(date) : shortTime(date))
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
             .padding(.horizontal, 6)
@@ -669,6 +690,11 @@ private struct UnderCursorTimeLabel: View {
     private func shortTime(_ date: Date) -> String {
         let df = DateFormatter()
         df.dateFormat = "MMM d, h:mm a"
+        return df.string(from: date)
+    }
+    private func fullDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "MMMM d, yyyy"
         return df.string(from: date)
     }
 }

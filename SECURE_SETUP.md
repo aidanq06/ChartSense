@@ -127,7 +127,8 @@ You should **NOT** see `Config.plist` in the output.
    - Add:
      - `SUPABASE_URL`
      - `SUPABASE_ANON_KEY`
-     - `ALPHA_VANTAGE_API_KEY`
+      - `ALPHA_VANTAGE_API_KEY`
+      - `GOOGLE_API_KEY` (Gemini 2.5 Flash)
 
 2. **Or use Xcode build phases**:
    ```bash
@@ -143,7 +144,8 @@ You should **NOT** see `Config.plist` in the output.
    - Add repository secrets:
      - `SUPABASE_URL`
      - `SUPABASE_ANON_KEY`
-     - `ALPHA_VANTAGE_API_KEY`
+      - `ALPHA_VANTAGE_API_KEY`
+      - `GOOGLE_API_KEY`
 
 2. **Use in workflow**:
    ```yaml

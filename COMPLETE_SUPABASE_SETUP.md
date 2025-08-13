@@ -136,7 +136,9 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 # Deploy all functions
 supabase functions deploy fetch-stock-data
 supabase functions deploy fetch-sentiment-data
+supabase secrets set GOOGLE_API_KEY=your_google_api_key_here
 supabase functions deploy ai-chat
+supabase functions invoke ai-chat --no-verify-jwt --body '{"message":"Ping"}'
 
 # Or deploy all at once
 supabase functions deploy

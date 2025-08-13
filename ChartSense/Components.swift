@@ -1166,49 +1166,295 @@ struct WatchlistWidget: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(data.stocks.prefix(3), id: \.symbol) { stock in
-                Button(action: { onStockTapped(stock) }) {
-                    HStack(spacing: 8) {
-                        // Stock info
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(stock.symbol)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                            
-                            Text(stock.companyName)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                                .lineLimit(1)
-                        }
-                        
-                        Spacer()
-                        
-                        // Price and sentiment
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(stock.formattedPrice)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                                
-                            HStack(spacing: 4) {
-                                Text(stock.formattedChange)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(stock.dailyChange >= 0 ? Color.bullish : Color.bearish)
-                            
-                                // Sentiment indicator
-                                if let sentiment = data.sentiments[stock.symbol] {
-                                    Image(systemName: sentiment.overallRating.icon)
-                                        .font(.system(size: 8, weight: .medium))
-                                        .foregroundColor(Color(sentiment.overallRating.color))
-                                }
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
+                WatchlistTickerItemView(
+                    stock: stock,
+                    sentiment: data.sentiments[stock.symbol]
+                ) { onStockTapped(stock) }
                 
                 if stock.symbol != data.stocks.prefix(3).last?.symbol {
                     Divider()
                         .background(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Premium Watchlist Ticker Item
+struct WatchlistTickerItemView: View {
+    let stock: Stock
+    let sentiment: SentimentAnalysis?
+    let onTap: () -> Void
+    
+    @StateObject private var themeManager = ThemeManager.shared
+    @State private var isPressed = false
+    
+    private var changeIsPositive: Bool { stock.dailyChangePercent >= 0 }
+    
+    private var sentimentScore: Double { sentiment?.score ?? 0 }
+    private var sentimentScoreInt: Int { Int(round(sentimentScore * 100)) }
+    private var confidence: Double { sentiment?.confidence ?? 0 }
+    
+    private var shortClassification: String {
+        guard let rating = sentiment?.overallRating else { return "Neutral" }
+        switch rating {
+        case .stronglyBullish, .bullish, .cautiouslyOptimistic: return "Bullish"
+        case .neutral: return "Neutral"
+        case .bearishUndercurrents, .bearish, .highlyNegative: return "Bearish"
+        }
+    }
+    
+    // Factor percents normalized to 0–100 (from -1..1 inputs)
+    private var socialPercent: Int {
+        let v = sentiment?.breakdown.socialSentiment ?? 0
+        return Int(max(0, min(100, ((v + 1) / 2) * 100)).rounded())
+    }
+    private var newsPercent: Int {
+        let pos = sentiment?.breakdown.newsPositive ?? 0
+        let neg = sentiment?.breakdown.newsNegative ?? 0
+        // Net bias −1..1, normalize
+        let net = max(-1, min(1, pos - neg))
+        return Int(max(0, min(100, ((net + 1) / 2) * 100)).rounded())
+    }
+    private var technicalPercent: Int {
+        let v = sentiment?.breakdown.technicalIndicators ?? 0
+        return Int(max(0, min(100, ((v + 1) / 2) * 100)).rounded())
+    }
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(stock.symbol)
+                            .font(.system(size: 14, weight: .semibold, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .tracking(-0.2)
+                        Text(stock.companyName)
+                            .font(.system(size: 10, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(stock.formattedPrice)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                        ChangeChip(changePercentText: stock.formattedChangePercent, isPositive: changeIsPositive)
+                    }
+                }
+                
+                // Sentiment strip + confidence
+                if sentiment != nil {
+                    HStack(spacing: 8) {
+                        SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
+                        Spacer(minLength: 8)
+                        ConfidenceCapsule(confidence: confidence)
+                    }
+                }
+                
+                // Factors
+                if sentiment != nil {
+                    HStack(spacing: 6) {
+                        FactorPill(icon: "person.2", title: "Social", percent: socialPercent)
+                        FactorPill(icon: "newspaper", title: "News", percent: newsPercent)
+                        FactorPill(icon: "wrench.and.screwdriver", title: "Tech", percent: technicalPercent)
+                        Spacer()
+                    }
+                }
+                
+                // Sparkline
+                SparklineMini(data: stock.sparklineData, isPositive: changeIsPositive)
+                    .frame(height: 28)
+            }
+            .contentShape(Rectangle())
+            .scaleEffect(isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.08), value: isPressed)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            isPressed = pressing
+        }, perform: {})
+    }
+}
+
+// MARK: - Change Chip
+private struct ChangeChip: View {
+    let changePercentText: String
+    let isPositive: Bool
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
+                .font(.system(size: 9, weight: .semibold))
+            Text(changePercentText)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundColor(isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
+                                   : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background((isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
+                                 : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.12))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Sentiment Strip
+private struct SentimentStrip: View {
+    let score: Double // -1..1
+    let label: String
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    private var progress: CGFloat { CGFloat(max(0, min(1, (score + 1) / 2))) }
+    
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
+                    .frame(height: 6)
+                
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        themeManager.isDarkMode ? AppTheme.dark.colors.error.opacity(0.55) : AppTheme.light.colors.error.opacity(0.55),
+                        themeManager.isDarkMode ? AppTheme.dark.colors.neutral.opacity(0.35) : AppTheme.light.colors.neutral.opacity(0.35),
+                        themeManager.isDarkMode ? AppTheme.dark.colors.success.opacity(0.55) : AppTheme.light.colors.success.opacity(0.55)
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .mask(
+                    RoundedRectangle(cornerRadius: 3)
+                        .frame(height: 6)
+                )
+                
+                // Marker
+                Circle()
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 1)
+                    )
+                    .offset(x: max(0, min(geo.size.width - 8, progress * geo.size.width - 4)))
+                
+                // Label near marker
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .offset(x: max(0, min(geo.size.width - 60, progress * geo.size.width - 30)), y: -14)
+            }
+        }
+        .frame(height: 12)
+    }
+}
+
+// MARK: - Confidence Capsule
+private struct ConfidenceCapsule: View {
+    let confidence: Double // 0..1
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    private var clamped: CGFloat { CGFloat(max(0, min(1, confidence))) }
+    private var percentText: String { "\(Int((clamped * 100).rounded()))%" }
+    
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+            Capsule()
+                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.35) : AppTheme.light.colors.primary.opacity(0.35))
+                .frame(width: 64 * clamped)
+            Text(percentText)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                .frame(maxWidth: .infinity)
+        }
+        .frame(width: 64, height: 14)
+        .overlay(
+            Capsule().stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - Factor Pill
+private struct FactorPill: View {
+    let icon: String
+    let title: String
+    let percent: Int
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            Text("\(percent)%")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        )
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - SparklineMini
+private struct SparklineMini: View {
+    let data: [Double]
+    let isPositive: Bool
+    
+    var body: some View {
+        GeometryReader { geo in
+            let values = data
+            if values.count > 1, let minV = values.min(), let maxV = values.max(), maxV - minV > 0 {
+                let points: [CGPoint] = values.enumerated().map { idx, val in
+                    let x = geo.size.width * CGFloat(idx) / CGFloat(values.count - 1)
+                    let y = geo.size.height * CGFloat(1 - (val - minV) / (maxV - minV))
+                    return CGPoint(x: x, y: y)
+                }
+                ZStack {
+                    // Gradient fill
+                    Path { path in
+                        path.move(to: points.first ?? .zero)
+                        for p in points.dropFirst() { path.addLine(to: p) }
+                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height))
+                        path.addLine(to: CGPoint(x: 0, y: geo.size.height))
+                        path.closeSubpath()
+                    }
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                (isPositive ? Color.blue : Color.purple).opacity(0.18),
+                                Color.clear
+                            ]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    
+                    // Line
+                    Path { path in
+                        path.move(to: points.first ?? .zero)
+                        for p in points.dropFirst() { path.addLine(to: p) }
+                    }
+                    .stroke(
+                        (isPositive ? Color.blue : Color.purple),
+                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+                    )
+                }
+            } else {
+                Rectangle().fill(Color.clear)
             }
         }
     }
