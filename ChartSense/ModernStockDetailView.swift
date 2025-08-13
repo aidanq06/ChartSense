@@ -64,6 +64,11 @@ struct ModernStockDetailView: View {
     @State private var showingAddToWatchlist = false
     @State private var currentStock: Stock
     @State private var chartRange: ChartRange = .oneDay
+    // Scrub-driven overrides for price and change
+    @State private var isScrubbing: Bool = false
+    @State private var overridePrice: Double? = nil
+    @State private var overrideChange: Double? = nil
+    @State private var overridePercent: Double? = nil
     
     private let tabs = ["Chart", "Sentiment", "Analysis", "Community"]
     
@@ -78,7 +83,11 @@ struct ModernStockDetailView: View {
             ModernStockDetailHeader(
                 stock: currentStock,
                 onBack: { dismiss() },
-                onAddToWatchlist: { showingAddToWatchlist = true }
+                onAddToWatchlist: { showingAddToWatchlist = true },
+                overridePrice: overridePrice,
+                overrideChange: overrideChange,
+                overridePercent: overridePercent,
+                isScrubbing: isScrubbing
             )
             
             // Modern Tab Navigation
@@ -90,7 +99,29 @@ struct ModernStockDetailView: View {
             // Tab Content
             TabView(selection: $selectedTab) {
                 // Chart Tab
-                UltraCleanChartTab(stock: currentStock, range: $chartRange)
+                UltraCleanChartTab(
+                    stock: currentStock,
+                    range: $chartRange,
+                    onScrubChanged: { price, delta, percent in
+                        overridePrice = price
+                        overrideChange = delta
+                        overridePercent = percent
+                    },
+                    onScrubbingStateChanged: { scrubbing in
+                        isScrubbing = scrubbing
+                        if !scrubbing {
+                            // First drive back to live values, then clear overrides next run loop
+                            overridePrice = currentStock.currentPrice
+                            overrideChange = currentStock.dailyChange
+                            overridePercent = currentStock.dailyChangePercent
+                            DispatchQueue.main.async {
+                                overridePrice = nil
+                                overrideChange = nil
+                                overridePercent = nil
+                            }
+                        }
+                    }
+                )
                     .tag(0)
 
                 // Sentiment Tab
@@ -167,15 +198,22 @@ struct SmoothPriceTransition: View {
     
     var body: some View {
         Text(String(format: "%.2f", displayPrice))
-            .font(.system(size: 40, weight: .bold, design: .default))
+            .font(.system(size: 42, weight: .bold, design: .default))
             .monospacedDigit()
             .kerning(-0.5)
             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            .contentTransition(.numericText(value: displayPrice))
+            .compositingGroup() // avoid offscreen blur during fast transitions
+            .drawingGroup(opaque: false, colorMode: .linear) // render at higher fidelity
+            .transaction { t in
+                // Very tight, high-fidelity spring to reduce blur/stretch
+                t.animation = isAnimating ? .interactiveSpring(response: 0.12, dampingFraction: 1.0, blendDuration: 0.0) : .default
+                t.disablesAnimations = false
+            }
+            .animation(isAnimating ? .interactiveSpring(response: 0.12, dampingFraction: 1.0, blendDuration: 0.0) : .default, value: displayPrice)
             .onChange(of: price) { newPrice in
                 if isAnimating {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        displayPrice = newPrice
-                    }
+                    displayPrice = newPrice
                 } else {
                     displayPrice = newPrice
                 }
@@ -221,6 +259,10 @@ struct SmoothChangeText: View {
                 .font(.system(size: 16, weight: .semibold, design: .default))
                 .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                .contentTransition(.numericText(value: displayChange))
+                .compositingGroup()
+                .drawingGroup(opaque: false, colorMode: .linear)
+                .animation(isAnimating ? .interactiveSpring(response: 0.12, dampingFraction: 1.0, blendDuration: 0.0) : .default, value: displayChange)
             
             Text(" (")
                 .font(.system(size: 16, weight: .semibold, design: .default))
@@ -236,6 +278,10 @@ struct SmoothChangeText: View {
                 .font(.system(size: 16, weight: .semibold, design: .default))
                 .monospacedDigit()
                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                .contentTransition(.numericText(value: displayPercent))
+                .compositingGroup()
+                .drawingGroup(opaque: false, colorMode: .linear)
+                .animation(isAnimating ? .interactiveSpring(response: 0.12, dampingFraction: 1.0, blendDuration: 0.0) : .default, value: displayPercent)
             
             Text("%)")
                 .font(.system(size: 16, weight: .semibold, design: .default))
@@ -244,18 +290,14 @@ struct SmoothChangeText: View {
         }
         .onChange(of: change) { newChange in
             if isAnimating {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    displayChange = newChange
-                }
+                displayChange = newChange
             } else {
                 displayChange = newChange
             }
         }
         .onChange(of: percent) { newPercent in
             if isAnimating {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    displayPercent = newPercent
-                }
+                displayPercent = newPercent
             } else {
                 displayPercent = newPercent
             }
@@ -308,6 +350,11 @@ struct ModernStockDetailHeader: View {
     let stock: Stock
     let onBack: () -> Void
     let onAddToWatchlist: () -> Void
+    // Overrides during scrubbing
+    var overridePrice: Double? = nil
+    var overrideChange: Double? = nil
+    var overridePercent: Double? = nil
+    var isScrubbing: Bool = false
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var watchlistViewModel = WatchlistViewModel.shared
     @StateObject private var premiumManager = PremiumManager.shared
@@ -368,20 +415,29 @@ struct ModernStockDetailHeader: View {
                         .truncationMode(.tail)
                     // Price and change under company
                     VStack(alignment: .leading, spacing: 4) {
+                        // While scrubbing (or during snap-back), derive change from the override price.
+                        // Otherwise, show the stock's canonical daily change values to ensure perfect match.
+                        let usingOverride = isScrubbing || overridePrice != nil || overrideChange != nil || overridePercent != nil
+                        let livePrice = overridePrice ?? stock.currentPrice
+                        let baseline = stock.currentPrice - stock.dailyChange
+                        let changeValue: Double = usingOverride ? (overrideChange ?? (livePrice - baseline)) : stock.dailyChange
+                        let percentValue: Double = usingOverride
+                            ? (overridePercent ?? (baseline == 0 ? 0 : (changeValue / baseline * 100.0)))
+                            : stock.dailyChangePercent
+                        let isPositive = changeValue >= 0
                         SmoothPriceTransition(
-                            price: stock.currentPrice,
-                            isAnimating: false
+                            price: livePrice,
+                            isAnimating: usingOverride
                         )
-                        let isPositive = stock.dailyChange >= 0
                         HStack(spacing: 6) {
                             Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(isPositive ? Color.bullish : Color.bearish)
                             SmoothChangeText(
-                                change: stock.dailyChange,
-                                percent: stock.dailyChangePercent,
+                                change: changeValue,
+                                percent: percentValue,
                                 isPositive: isPositive,
-                                isAnimating: false
+                                isAnimating: usingOverride
                             )
                         }
                     }

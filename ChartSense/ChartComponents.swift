@@ -117,17 +117,16 @@ struct ChartLoadingView: View {
 }
 
 // MARK: - Chart Range
-enum ChartRange: String, CaseIterable, Identifiable {
+enum ChartRange: String, Identifiable, CaseIterable {
     case oneDay = "1D"
     case oneWeek = "1W"
     case oneMonth = "1M"
-    case threeMonths = "3M"
     case ytd = "YTD"
     case oneYear = "1Y"
-    case fiveYears = "5Y"
     case max = "Max"
     var id: String { rawValue }
     var display: String { rawValue }
+    static var allCases: [ChartRange] { [.oneDay, .oneWeek, .oneMonth, .ytd, .oneYear, .max] }
 }
 
 // MARK: - Chart Data Point
@@ -141,6 +140,9 @@ struct ChartPoint: Identifiable, Equatable {
 struct UltraCleanChartTab: View {
     let stock: Stock
     @Binding var range: ChartRange
+    // Notify parent of scrub updates (price, delta, percent) and scrubbing state
+    var onScrubChanged: ((Double, Double, Double) -> Void)? = nil
+    var onScrubbingStateChanged: ((Bool) -> Void)? = nil
     @State private var points: [ChartPoint] = []
     @State private var isLoading: Bool = false
     @State private var isScrubbing: Bool = false
@@ -169,8 +171,8 @@ struct UltraCleanChartTab: View {
     private var isPositiveDelta: Bool { delta >= 0 }
     private var chartHeight: CGFloat {
         let screenH = UIScreen.main.bounds.height
-        // Target roughly half the screen, bounded for small/large devices
-        return min(480, max(320, screenH * 0.52))
+        // Slightly shorter chart to avoid header interference
+        return min(440, max(280, screenH * 0.46))
     }
 
     var body: some View {
@@ -199,8 +201,16 @@ struct UltraCleanChartTab: View {
                 isScrubbing: $isScrubbing,
                 scrubIndex: $scrubIndex,
                 baseline: baseline,
-                onScrubBegan: { Haptics.light() },
-                onScrubEnded: { Haptics.selection() },
+                showBaseline: (range == .oneDay),
+                onScrubBegan: {
+                    Haptics.light()
+                    onScrubbingStateChanged?(true)
+                },
+                onScrubEnded: {
+                    Haptics.selection()
+                    onScrubbingStateChanged?(false)
+                    // Do not emit a final value; parent will clear overrides
+                },
                 onCrossBaseline: { crossedAbove in
                     if let prev = crossedBaselinePreviouslyAbove, prev != crossedAbove { Haptics.selection() }
                     crossedBaselinePreviouslyAbove = crossedAbove
@@ -210,13 +220,19 @@ struct UltraCleanChartTab: View {
             .padding(.horizontal, 0)
             .transition(.opacity)
         }
-        .padding(.top, 8)
+        .padding(.top, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
         .onAppear { loadData(animated: true) }
-        .onChange(of: range) { _ in
+            .onChange(of: range) { _ in
             Haptics.selection()
             loadData(animated: true)
+        }
+        .onChange(of: scrubIndex) { _ in
+            // Emit live updates while scrubbing (price and percent); parent animates the rolling number
+            if isScrubbing {
+                onScrubChanged?(displayPrice, delta, deltaPercent)
+            }
         }
     }
 
@@ -233,16 +249,12 @@ struct UltraCleanChartTab: View {
                     series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 7)
                 case .oneMonth:
                     series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 30)
-                case .threeMonths:
-                    series = try await svc.fetchCandles5m(symbol: stock.symbol, hoursBack: 24 * 90)
                 case .ytd:
                     // Fetch 1D candles since start of year
                     let days = daysSinceStartOfYear()
                     series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: days)
                 case .oneYear:
                     series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365)
-                case .fiveYears:
-                    series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365 * 5)
                 case .max:
                     series = try await svc.fetchCandles1d(symbol: stock.symbol, daysBack: 365 * 15)
                 }
@@ -279,10 +291,8 @@ struct UltraCleanChartTab: View {
         case .oneDay: count = 160
         case .oneWeek: count = 220
         case .oneMonth: count = 260
-        case .threeMonths: count = 300
         case .ytd: count = 300
         case .oneYear: count = 320
-        case .fiveYears: count = 340
         case .max: count = 360
         }
 
@@ -299,10 +309,8 @@ struct UltraCleanChartTab: View {
             case .oneDay: t = -TimeInterval(count - i) * 60 * 3
             case .oneWeek: t = -TimeInterval(count - i) * 60 * 20
             case .oneMonth: t = -TimeInterval(count - i) * 60 * 60 * 3
-            case .threeMonths: t = -TimeInterval(count - i) * 60 * 60 * 6
             case .ytd: t = -TimeInterval(count - i) * 60 * 60 * 24
             case .oneYear: t = -TimeInterval(count - i) * 60 * 60 * 24
-            case .fiveYears: t = -TimeInterval(count - i) * 60 * 60 * 24 * 3
             case .max: t = -TimeInterval(count - i) * 60 * 60 * 24 * 7
             }
             let noise = Double.random(in: -volatility...volatility)
@@ -341,42 +349,55 @@ struct UltraCleanChartTab: View {
     }
 }
 
-// MARK: - Range Selector (enhanced pills)
+// MARK: - Range Selector (single-row, scrollable pills)
 struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
+    @Namespace private var selectionNamespace
     var body: some View {
-        // Two-row grid for better layout on small screens
-        let rows: [[ChartRange]] = [
-            [.oneDay, .oneWeek, .oneMonth, .threeMonths],
-            [.ytd, .oneYear, .fiveYears, .max]
-        ]
-        VStack(spacing: 10) {
-            ForEach(0..<rows.count, id: \.self) { rowIdx in
-                HStack(spacing: 8) {
-                    ForEach(rows[rowIdx], id: \.self) { r in
-                        let isSelected = (range == r)
-                        let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
-                        let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
-                        let backgroundStyle: AnyShapeStyle = isSelected
-                            ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
-                            : AnyShapeStyle(primary.opacity(0.10))
-                        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { range = r } }) {
+        let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
+        let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+        GeometryReader { geo in
+            let count = ChartRange.allCases.count
+            let spacing: CGFloat = 12
+            let height: CGFloat = 32
+            let totalSpacing = spacing * CGFloat(max(0, count - 1))
+            let buttonWidth = max(44, floor((geo.size.width - totalSpacing) / CGFloat(count)))
+            HStack(spacing: spacing) {
+                ForEach(ChartRange.allCases, id: \.self) { r in
+                    let isSelected = (range == r)
+                    Button(action: {
+                        Haptics.selection()
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { range = r }
+                    }) {
+                        ZStack {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
+                                    .matchedGeometryEffect(id: "timeframe_selection", in: selectionNamespace)
+                                    .shadow(color: primary.opacity(0.20), radius: 6, x: 0, y: 3)
+                            } else {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(primary.opacity(0.10))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(primary.opacity(0.14), lineWidth: 1)
+                                    )
+                            }
                             Text(r.display)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(isSelected ? .white : primary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Capsule().fill(backgroundStyle))
-                                .overlay(Capsule().stroke(primary.opacity(0.18), lineWidth: isSelected ? 0 : 1))
-                                .shadow(color: primary.opacity(isSelected ? 0.20 : 0.0), radius: isSelected ? 8 : 0, x: 0, y: 4)
-                                .modifier(SelectedGlow(isSelected: isSelected, primary: primary, secondary: secondary))
                         }
-                        .buttonStyle(.plain)
                     }
+                    .buttonStyle(.plain)
+                    .frame(width: buttonWidth, height: height)
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
+            .frame(width: geo.size.width, height: height, alignment: .center)
         }
+        .frame(height: 40)
+        .padding(.vertical, 0)
     }
 }
 
@@ -411,6 +432,7 @@ private struct UltraCleanChart: View {
     @Binding var isScrubbing: Bool
     @Binding var scrubIndex: Int?
     let baseline: Double
+    let showBaseline: Bool
     var onScrubBegan: () -> Void = {}
     var onScrubEnded: () -> Void = {}
     var onCrossBaseline: (Bool) -> Void = { _ in }
@@ -460,13 +482,16 @@ private struct UltraCleanChart: View {
                     )
                 }
 
-                // Baseline (whisper-light)
-                if let y = yForPrice(baseline, in: frame.size, points: points) {
+                // Baseline (market open price) — visible only when enabled (e.g., 1D)
+                if showBaseline, let y = yForPrice(baseline, in: frame.size, points: points) {
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: y))
                         p.addLine(to: CGPoint(x: frame.width, y: y))
                     }
-                    .stroke(Color.primary.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .stroke(
+                        (Color.primary.opacity(0.22)),
+                        style: StrokeStyle(lineWidth: 1.25, dash: [6, 3])
+                    )
                 }
 
                 // Line with subtle glow
@@ -496,12 +521,12 @@ private struct UltraCleanChart: View {
                         .frame(width: 8, height: 8)
                         .position(pt)
 
-                    // Tooltip
+                    // Time label (no popup tooltip)
                     if idx < points.count {
-                        let price = points[idx].price
                         let date = points[idx].date
-                        FloatingTooltip(price: price, date: date, baseline: baseline)
-                            .position(x: clamp(pt.x + 60, min: 70, max: frame.width - 70), y: max(24, pt.y - 28))
+                        UnderCursorTimeLabel(date: date)
+                            .modifier(UnderCursorPositionModifier(x: pt.x, containerWidth: frame.width, spacing: 6, avoidLineOverlap: true))
+                            .position(x: pt.x, y: -6)
                     }
                 }
             }
@@ -610,6 +635,65 @@ private struct FloatingTooltip: View {
         let df = DateFormatter()
         df.dateFormat = "MMM d, h:mm a"
         return df.string(from: date)
+    }
+}
+
+// MARK: - Width Preference Key
+private struct WidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+// MARK: - Under Cursor Time Label
+private struct UnderCursorTimeLabel: View {
+    let date: Date
+    @StateObject private var themeManager = ThemeManager.shared
+    var body: some View {
+        let bg = themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground
+        let border = themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border
+        Text(shortTime(date))
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(bg)
+                    .overlay(Capsule().stroke(border, lineWidth: 0.5))
+                    .shadow(color: Color.black.opacity(themeManager.isDarkMode ? 0.35 : 0.08), radius: 4, x: 0, y: 1)
+            )
+            .fixedSize()
+    }
+    private func shortTime(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "MMM d, h:mm a"
+        return df.string(from: date)
+    }
+}
+
+// MARK: - Under-cursor position clamping
+private struct UnderCursorPositionModifier: ViewModifier {
+    let x: CGFloat
+    let containerWidth: CGFloat
+    var spacing: CGFloat = 0
+    var avoidLineOverlap: Bool = false
+    @State private var labelWidth: CGFloat = 92
+    func body(content: Content) -> some View {
+        content
+            .background(GeometryReader { proxy in
+                Color.clear.onAppear { labelWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { w in labelWidth = w }
+            })
+            .offset(x: offsetForEdges())
+            .padding(.top, avoidLineOverlap ? spacing : 0)
+    }
+    private func offsetForEdges() -> CGFloat {
+        let half = labelWidth / 2
+        if x - half < 0 { return -(x - half) }
+        if x + half > containerWidth { return containerWidth - (x + half) }
+        return 0
     }
 }
 
