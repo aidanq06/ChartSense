@@ -67,9 +67,33 @@ class AIChatViewModel: ObservableObject {
         // Show typing indicator
         isTyping = true
         
-        // Simulate AI response (replace with actual AI service)
+        // Call backend AI function
         Task {
-            await generateAIResponse(to: trimmedContent)
+            do {
+                let aiMessage = try await SupabaseService.shared.sendAIMessage(message: trimmedContent)
+                await MainActor.run {
+                    self.isTyping = false
+                    self.messages.append(aiMessage)
+                    self.updateSuggestions(based: trimmedContent)
+                }
+            } catch {
+                await MainActor.run {
+                    self.isTyping = false
+                    if let se = error as? SupabaseError {
+                        switch se {
+                        case .rateLimitExceeded:
+                            self.messages.append(ChatMessage(content: "Daily AI limit reached. Try again tomorrow.", isUser: false, status: .sent))
+                            return
+                        case .notAuthenticated:
+                            self.messages.append(ChatMessage(content: "Please sign in to use AI.", isUser: false, status: .sent))
+                            return
+                        default:
+                            break
+                        }
+                    }
+                    self.messages.append(ChatMessage(content: "Sorry, something went wrong.", isUser: false, status: .sent))
+                }
+            }
         }
     }
     

@@ -1119,7 +1119,7 @@ struct NewsWidget: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(data.headlines.prefix(2), id: \.id) { news in
                 Button(action: { onNewsTapped(news) }) {
                     HStack(alignment: .top, spacing: 8) {
@@ -1223,23 +1223,23 @@ struct WatchlistTickerItemView: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 // Header
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(stock.symbol)
-                            .font(.system(size: 14, weight: .semibold, design: .default))
+                            .font(.system(size: 16, weight: .semibold, design: .default))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                             .tracking(-0.2)
                         Text(stock.companyName)
-                            .font(.system(size: 10, weight: .medium, design: .default))
+                            .font(.system(size: 12, weight: .medium, design: .default))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 5) {
                         Text(stock.formattedPrice)
-                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 17, weight: .semibold, design: .monospaced))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                         ChangeChip(changePercentText: stock.formattedChangePercent, isPositive: changeIsPositive)
                     }
@@ -1247,7 +1247,7 @@ struct WatchlistTickerItemView: View {
                 
                 // Sentiment strip + confidence
                 if sentiment != nil {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
                         Spacer(minLength: 8)
                         ConfidenceCapsule(confidence: confidence)
@@ -1256,21 +1256,61 @@ struct WatchlistTickerItemView: View {
                 
                 // Factors
                 if sentiment != nil {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         FactorPill(icon: "person.2", title: "Social", percent: socialPercent)
+                            .frame(maxWidth: .infinity)
                         FactorPill(icon: "newspaper", title: "News", percent: newsPercent)
+                            .frame(maxWidth: .infinity)
                         FactorPill(icon: "wrench.and.screwdriver", title: "Tech", percent: technicalPercent)
-                        Spacer()
+                            .frame(maxWidth: .infinity)
                     }
                 }
                 
                 // Sparkline
                 SparklineMini(data: stock.sparklineData, isPositive: changeIsPositive)
-                    .frame(height: 28)
+                    .frame(height: 34)
             }
             .contentShape(Rectangle())
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.08), value: isPressed)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+            )
+            // Inner highlight for glass effect
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            // Outer gradient border
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
+                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(
+                color: (themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color).opacity(0.6),
+                radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
+                x: themeManager.isDarkMode ? AppTheme.dark.shadows.card.x : AppTheme.light.shadows.card.x,
+                y: themeManager.isDarkMode ? AppTheme.dark.shadows.card.y : AppTheme.light.shadows.card.y
+            )
         }
         .buttonStyle(PlainButtonStyle())
         .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
@@ -1286,19 +1326,32 @@ private struct ChangeChip: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
-                .font(.system(size: 9, weight: .semibold))
-            Text(changePercentText)
                 .font(.system(size: 10, weight: .semibold))
+            Text(changePercentText)
+                .font(.system(size: 11.5, weight: .semibold))
         }
         .foregroundColor(isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
                                    : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background((isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
-                                 : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.12))
-        .cornerRadius(6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            LinearGradient(
+                colors: [
+                    (isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success) : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.22),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke((isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
+                                     : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.35), lineWidth: 0.5)
+        )
+        .cornerRadius(7)
     }
 }
 
@@ -1313,42 +1366,39 @@ private struct SentimentStrip: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: 4)
                     .fill(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryBackground : AppTheme.light.colors.tertiaryBackground)
-                    .frame(height: 6)
+                    .frame(height: 7)
                 
                 LinearGradient(
-                    gradient: Gradient(colors: [
-                        themeManager.isDarkMode ? AppTheme.dark.colors.error.opacity(0.55) : AppTheme.light.colors.error.opacity(0.55),
-                        themeManager.isDarkMode ? AppTheme.dark.colors.neutral.opacity(0.35) : AppTheme.light.colors.neutral.opacity(0.35),
-                        themeManager.isDarkMode ? AppTheme.dark.colors.success.opacity(0.55) : AppTheme.light.colors.success.opacity(0.55)
-                    ]),
+                    colors: [
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error).opacity(0.55),
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.neutral : AppTheme.light.colors.neutral).opacity(0.35),
+                        (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success).opacity(0.55)
+                    ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
-                .mask(
-                    RoundedRectangle(cornerRadius: 3)
-                        .frame(height: 6)
-                )
+                .mask(RoundedRectangle(cornerRadius: 4).frame(height: 7))
                 
                 // Marker
                 Circle()
                     .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                     .overlay(
                         Circle()
                             .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 1)
                     )
-                    .offset(x: max(0, min(geo.size.width - 8, progress * geo.size.width - 4)))
+                    .offset(x: max(0, min(geo.size.width - 10, progress * geo.size.width - 5)))
                 
                 // Label near marker
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                    .offset(x: max(0, min(geo.size.width - 60, progress * geo.size.width - 30)), y: -14)
+                    .offset(x: max(0, min(geo.size.width - 70, progress * geo.size.width - 35)), y: -16)
             }
         }
-        .frame(height: 12)
+        .frame(height: 14)
     }
 }
 
@@ -1365,16 +1415,25 @@ private struct ConfidenceCapsule: View {
             Capsule()
                 .fill(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
             Capsule()
-                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.35) : AppTheme.light.colors.primary.opacity(0.35))
-                .frame(width: 64 * clamped)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
+                            themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ).opacity(0.55)
+                )
+                .frame(width: 72 * clamped)
             Text(percentText)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 .frame(maxWidth: .infinity)
         }
-        .frame(width: 64, height: 14)
+        .frame(width: 72, height: 16)
         .overlay(
-            Capsule().stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+            Capsule().stroke((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.35), lineWidth: 0.5)
         )
     }
 }
@@ -1389,23 +1448,45 @@ private struct FactorPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            Text("\(percent)%")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
+                            themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text("\(title) \(percent)%")
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .truncationMode(.tail)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryBackground : AppTheme.light.colors.secondaryBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.14),
+                            (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         )
-        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.22), lineWidth: 0.6)
+        )
+        .cornerRadius(10)
+        .frame(height: 30)
     }
 }
 
@@ -1434,10 +1515,11 @@ private struct SparklineMini: View {
                     }
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
-                                (isPositive ? Color.blue : Color.purple).opacity(0.18),
+                            colors: [
+                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.35),
+                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary).opacity(0.10),
                                 Color.clear
-                            ]),
+                            ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -1449,8 +1531,15 @@ private struct SparklineMini: View {
                         for p in points.dropFirst() { path.addLine(to: p) }
                     }
                     .stroke(
-                        (isPositive ? Color.blue : Color.purple),
-                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+                        LinearGradient(
+                            colors: [
+                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
+                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
                     )
                 }
             } else {

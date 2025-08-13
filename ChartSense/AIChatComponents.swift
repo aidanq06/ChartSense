@@ -668,9 +668,16 @@ struct WelcomeMessage: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+                    // Disclaimer below actions
+                    Text("Educational information only. Not financial advice.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.tertiaryText : AppTheme.light.colors.tertiaryText)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.9)
+                        .padding(.top, 2)
                 }
             }
-            
+
             // Compact suggestion row
             HStack(spacing: 6) {
                 ForEach(quickActions.prefix(3)) { suggestion in
