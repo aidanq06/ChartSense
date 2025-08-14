@@ -1282,11 +1282,7 @@ struct HomeView: View {
                         .opacity(animateHeader ? 1.0 : 0.0)
                         .animation(.easeOut(duration: 0.7), value: animateHeader)
                     
-                    // Market Status Bar
-                    MarketStatusBar()
-                        .offset(y: animateHeader ? 0 : -4)
-                        .opacity(animateHeader ? 1.0 : 0.0)
-                        .animation(.easeOut(duration: 0.5).delay(0.1), value: animateHeader)
+                    // Market Status Bar removed for a cleaner header
                     
                     // Sentiment-Focused Watchlist Section
                     SentimentFocusedWatchlistSection(
@@ -1382,21 +1378,7 @@ struct CleanHeader: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                // Custom accent line with unique animation
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.blue, Color.purple, Color.blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 4, height: 40)
-                    .scaleEffect(animateAccent ? 1.0 : 0.8)
-                    .opacity(animateAccent ? 1.0 : 0.6)
-                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateAccent)
-                
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("ChartSense")
                         .font(.system(size: 36, weight: .bold, design: .default))
@@ -1408,9 +1390,7 @@ struct CleanHeader: View {
         }
         .padding(.top, 32)
         .padding(.bottom, 12)
-        .onAppear {
-            animateAccent = true
-        }
+        .onAppear { animateAccent = false }
     }
 }
 

@@ -1235,12 +1235,23 @@ struct WatchlistTickerItemView: View {
                             .font(.system(size: 12, weight: .medium, design: .default))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .truncationMode(.tail)
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 5) {
                         Text(stock.formattedPrice)
                             .font(.system(size: 17, weight: .semibold, design: .monospaced))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
+                                        themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                         ChangeChip(changePercentText: stock.formattedChangePercent, isPositive: changeIsPositive)
                     }
                 }
@@ -1251,19 +1262,24 @@ struct WatchlistTickerItemView: View {
                         SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
                         Spacer(minLength: 8)
                         ConfidenceCapsule(confidence: confidence)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
                 
                 // Factors
                 if sentiment != nil {
-                    HStack(spacing: 8) {
-                        FactorPill(icon: "person.2", title: "Social", percent: socialPercent)
-                            .frame(maxWidth: .infinity)
-                        FactorPill(icon: "newspaper", title: "News", percent: newsPercent)
-                            .frame(maxWidth: .infinity)
-                        FactorPill(icon: "wrench.and.screwdriver", title: "Tech", percent: technicalPercent)
-                            .frame(maxWidth: .infinity)
+                    GeometryReader { geo in
+                        let pillWidth = (geo.size.width - 16) / 3 // 8pt gaps between three pills
+                        HStack(spacing: 8) {
+                            FactorPill(icon: "person.2", title: "Social", percent: socialPercent)
+                                .frame(width: pillWidth)
+                            FactorPill(icon: "newspaper", title: "News", percent: newsPercent)
+                                .frame(width: pillWidth)
+                            FactorPill(icon: "wrench.and.screwdriver", title: "Tech", percent: technicalPercent)
+                                .frame(width: pillWidth)
+                        }
                     }
+                    .frame(height: 30)
                 }
                 
                 // Sparkline
@@ -1302,9 +1318,10 @@ struct WatchlistTickerItemView: View {
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1
+                        lineWidth: 1.2
                     )
             )
+            .shadow(color: (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15), radius: 6, x: 0, y: 2)
             .shadow(
                 color: (themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color).opacity(0.6),
                 radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
@@ -1462,8 +1479,10 @@ private struct FactorPill: View {
             Text("\(title) \(percent)%")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
+                .allowsTightening(true)
                 .truncationMode(.tail)
         }
         .padding(.horizontal, 10)
