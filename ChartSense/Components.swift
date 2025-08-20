@@ -1223,18 +1223,18 @@ struct WatchlistTickerItemView: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 // Header
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(stock.symbol)
+                            Text(stock.symbol)
                             .font(.system(size: 16, weight: .semibold, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                             .tracking(-0.2)
-                        Text(stock.companyName)
+                            Text(stock.companyName)
                             .font(.system(size: 12, weight: .medium, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(1)
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .lineLimit(1)
                             .minimumScaleFactor(0.85)
                             .truncationMode(.tail)
                     }
@@ -1245,8 +1245,8 @@ struct WatchlistTickerItemView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
-                                        themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                                        themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                        themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1255,15 +1255,13 @@ struct WatchlistTickerItemView: View {
                         ChangeChip(changePercentText: stock.formattedChangePercent, isPositive: changeIsPositive)
                     }
                 }
+                .padding(.bottom, 8)
                 
-                // Sentiment strip + confidence
+                // Sentiment strip
                 if sentiment != nil {
-                    HStack(spacing: 10) {
-                        SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
-                        Spacer(minLength: 8)
-                        ConfidenceCapsule(confidence: confidence)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
+                    SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
+                        .padding(.vertical, 6)
+                        .padding(.top, 4)
                 }
                 
                 // Factors
@@ -1280,16 +1278,17 @@ struct WatchlistTickerItemView: View {
                         }
                     }
                     .frame(height: 30)
+                    .padding(.top, 4)
                 }
                 
                 // Sparkline
                 SparklineMini(data: stock.sparklineData, isPositive: changeIsPositive)
-                    .frame(height: 34)
+                    .frame(height: 38)
             }
             .contentShape(Rectangle())
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.08), value: isPressed)
-            .padding(12)
+            .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(.ultraThinMaterial)
@@ -1312,8 +1311,8 @@ struct WatchlistTickerItemView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
-                                (themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
+                                themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -1321,7 +1320,7 @@ struct WatchlistTickerItemView: View {
                         lineWidth: 1.2
                     )
             )
-            .shadow(color: (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.15), radius: 6, x: 0, y: 2)
+            .shadow(color: (themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)).opacity(0.15), radius: 6, x: 0, y: 2)
             .shadow(
                 color: (themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color).opacity(0.6),
                 radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
@@ -1349,24 +1348,22 @@ private struct ChangeChip: View {
             Text(changePercentText)
                 .font(.system(size: 11.5, weight: .semibold))
         }
-        .foregroundColor(isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
-                                   : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error))
+        .foregroundColor(isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3) : Color(red: 0.9, green: 0.2, blue: 0.3))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
             LinearGradient(
                 colors: [
-                    (isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success) : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.22),
-                    Color.clear
+                    isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.25) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.25),
+                    isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.1) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.1)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke((isPositive ? (themeManager.isDarkMode ? AppTheme.dark.colors.success : AppTheme.light.colors.success)
-                                     : (themeManager.isDarkMode ? AppTheme.dark.colors.error : AppTheme.light.colors.error)).opacity(0.35), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.5) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.5), lineWidth: 1.0)
         )
         .cornerRadius(7)
     }
@@ -1445,7 +1442,7 @@ private struct ConfidenceCapsule: View {
                 .frame(width: 72 * clamped)
             Text(percentText)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                 .frame(maxWidth: .infinity)
         }
         .frame(width: 72, height: 16)
@@ -1469,8 +1466,8 @@ private struct FactorPill: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary,
-                            themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
+                            themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                            themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1492,8 +1489,8 @@ private struct FactorPill: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.14),
-                            (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.08)
+                            themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0).opacity(0.12) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.08),
+                            themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0).opacity(0.06) : Color(red: 0.4, green: 0.3, blue: 0.8).opacity(0.04)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1502,7 +1499,7 @@ private struct FactorPill: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke((themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.22), lineWidth: 0.6)
+                .stroke(themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0).opacity(0.25) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.2), lineWidth: 0.6)
         )
         .cornerRadius(10)
         .frame(height: 30)
@@ -1513,6 +1510,19 @@ private struct FactorPill: View {
 private struct SparklineMini: View {
     let data: [Double]
     let isPositive: Bool
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    private var sparklineFillColors: [Color] {
+        let color1 = themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)
+        let color2 = themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+        return [color1.opacity(0.25), color2.opacity(0.1), Color.clear]
+    }
+    
+    private var sparklineStrokeColors: [Color] {
+        let color1 = themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)
+        let color2 = themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+        return [color1, color2]
+    }
     
     var body: some View {
         GeometryReader { geo in
@@ -1534,11 +1544,7 @@ private struct SparklineMini: View {
                     }
                     .fill(
                         LinearGradient(
-                            colors: [
-                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary).opacity(0.35),
-                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary).opacity(0.10),
-                                Color.clear
-                            ],
+                            colors: sparklineFillColors,
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -1551,14 +1557,11 @@ private struct SparklineMini: View {
                     }
                     .stroke(
                         LinearGradient(
-                            colors: [
-                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary),
-                                (ThemeManager.shared.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary)
-                            ],
+                            colors: sparklineStrokeColors,
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+                        style: StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round)
                     )
                 }
             } else {

@@ -1272,8 +1272,8 @@ struct HomeView: View {
                     (themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
                         .ignoresSafeArea()
             
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 16) {
+                        ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 12) {
 
                     
                     // Clean Header
@@ -1282,7 +1282,7 @@ struct HomeView: View {
                         .opacity(animateHeader ? 1.0 : 0.0)
                         .animation(.easeOut(duration: 0.7), value: animateHeader)
                     
-                    // Market Status Bar removed for a cleaner header
+                    
                     
                     // Sentiment-Focused Watchlist Section
                     SentimentFocusedWatchlistSection(
@@ -1300,15 +1300,15 @@ struct HomeView: View {
                     .opacity(animateCards ? 1.0 : 0.0)
                     .animation(.easeOut(duration: 0.3).delay(0.05), value: animateCards)
                     
-                    // Sentiment Alerts with Enhanced Visuals
+                                        // Sentiment Alerts with Enhanced Visuals
                     EnhancedSentimentAlertsSection(alerts: homeViewModel.sentimentAlerts)
-                        .offset(y: animateCards ? 0 : 10)
+                        .offset(y: animateCards ? 0 : 8)
                         .opacity(animateCards ? 1.0 : 0.0)
                         .animation(.easeOut(duration: 0.3).delay(0.2), value: animateCards)
                     
                     // News Feed with Premium Design
                     PremiumNewsFeedSection(news: homeViewModel.newsItems)
-                        .offset(y: animateCards ? 0 : 8)
+                        .offset(y: animateCards ? 0 : 6)
                         .opacity(animateCards ? 1.0 : 0.0)
                         .animation(.easeOut(duration: 0.3).delay(0.35), value: animateCards)
                     
@@ -1317,9 +1317,9 @@ struct HomeView: View {
                         summary: homeViewModel.marketSummary,
                         onAskAI: { showingAI = true }
                     )
-                    .offset(y: animateCards ? 0 : 6)
-                    .opacity(animateCards ? 1.0 : 0.0)
-                    .animation(.easeOut(duration: 0.3).delay(0.5), value: animateCards)
+                        .offset(y: animateCards ? 0 : 4)
+                        .opacity(animateCards ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.3).delay(0.5), value: animateCards)
                     
                     Spacer(minLength: 60)
                 }
@@ -1374,11 +1374,10 @@ struct HomeView: View {
 // MARK: - Clean Header
 struct CleanHeader: View {
     @StateObject private var themeManager = ThemeManager.shared
-    @State private var animateAccent = false
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
+        VStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("ChartSense")
                         .font(.system(size: 36, weight: .bold, design: .default))
@@ -1388,9 +1387,8 @@ struct CleanHeader: View {
                 Spacer()
             }
         }
-        .padding(.top, 32)
-        .padding(.bottom, 12)
-        .onAppear { animateAccent = false }
+        .padding(.top, 16)
+        .padding(.bottom, 8)
     }
 }
 
@@ -1405,7 +1403,7 @@ struct SentimentFocusedWatchlistSection: View {
     @State private var hoveredIndex: Int?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
             // Section Header with Unique Design
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -1491,7 +1489,7 @@ struct SentimentFocusedWatchlistSection: View {
                     .scaleEffect(animateCards ? 1.0 : 0.9)
                     .animation(.easeOut(duration: 0.3).delay(0.25), value: animateCards)
                 }
-                .padding(.vertical, 28)
+                .padding(.vertical, 20)
             } else {
                 // Sentiment-Focused Stock Cards with Beautiful Staggered Animation
                 VStack(spacing: 12) {
@@ -1529,7 +1527,7 @@ struct SentimentFocusedWatchlistSection: View {
                 }
             }
         }
-        .padding(.top, 20)
+        .padding(.top, 8)
         .onAppear {
             // Start card animations immediately when section appears
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -1678,52 +1676,7 @@ struct SentimentBreakdownItem: View {
     }
 }
 
-// MARK: - Market Status Bar
-struct MarketStatusBar: View {
-    @StateObject private var themeManager = ThemeManager.shared
-    @State private var animateStatus = false
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Live indicator
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                    .scaleEffect(animateStatus ? 1.2 : 1.0)
-                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateStatus)
-                
-                Text("LIVE")
-                    .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundColor(Color.green)
-            }
-            
-            Text("Market Open")
-                .font(.system(size: 14, weight: .medium, design: .default))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-            
-            Spacer()
-            
-            // Market time
-            Text("9:30 AM - 4:00 PM ET")
-                .font(.system(size: 12, weight: .medium, design: .default))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color(hex: "F8F9FA"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                )
-        )
-        .onAppear {
-            animateStatus = true
-        }
-    }
-}
+
 
 // MARK: - AI View
 struct AIView: View {

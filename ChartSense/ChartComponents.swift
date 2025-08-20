@@ -39,28 +39,7 @@ enum Haptics {
 // MARK: - UltraCleanChart (all-in-one, glitch-free)
 // (removed: UltraCleanChart)
 
-// MARK: - Animated Gradient Sweep
-private struct AnimatedSweep: View {
-    @State private var phase: CGFloat = -0.4
-    var body: some View {
-        LinearGradient(colors: [Color.white.opacity(0.0), Color.white.opacity(0.12), Color.white.opacity(0.0)], startPoint: .leading, endPoint: .trailing)
-            .blendMode(.plusLighter)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .mask(
-                Rectangle()
-                    .fill(
-                        LinearGradient(colors: [.black.opacity(0), .black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
-                    )
-                    .offset(x: phase * UIScreen.main.bounds.width)
-            )
-            .allowsHitTesting(false)
-            .onAppear {
-                withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
-                    phase = 1.4
-                }
-            }
-    }
-}
+
 
 // MARK: - Chart Fill Area
 // (removed: ChartFillArea)
