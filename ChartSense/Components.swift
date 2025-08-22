@@ -1437,14 +1437,14 @@ struct WatchlistTickerItemView: View {
                         
                         // AI Summary text
                         Text(aiSummaryText)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                         
                         Spacer()
                     }
-                    .padding(.top, 4)
+                    .padding(.vertical, 8)
                 }
             }
             .contentShape(Rectangle())
