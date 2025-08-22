@@ -1221,9 +1221,30 @@ struct WatchlistTickerItemView: View {
         return Int(max(0, min(100, ((v + 1) / 2) * 100)).rounded())
     }
     
+    private var aiSummaryText: String {
+        guard let sentiment = sentiment else { return "AI analysis unavailable" }
+        
+        let score = sentiment.score
+        let social = socialPercent
+        let news = newsPercent
+        let technical = technicalPercent
+        
+        if score > 0.3 {
+            return "Strong positive sentiment across all factors with high confidence"
+        } else if score > 0.1 {
+            return "Moderate positive outlook with balanced factor analysis"
+        } else if score > -0.1 {
+            return "Neutral sentiment with mixed factor performance"
+        } else if score > -0.3 {
+            return "Slight negative bias with cautious factor outlook"
+        } else {
+            return "Strong negative sentiment across multiple factors"
+        }
+    }
+    
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 // Header
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -1245,8 +1266,8 @@ struct WatchlistTickerItemView: View {
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [
-                                        themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
-                                        themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                        themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                        themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -1255,50 +1276,198 @@ struct WatchlistTickerItemView: View {
                         ChangeChip(changePercentText: stock.formattedChangePercent, isPositive: changeIsPositive)
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.bottom, 4)
                 
-                // Sentiment strip
+                // Sentiment indicator
                 if sentiment != nil {
-                    SentimentStrip(score: sentimentScore, label: "\(shortClassification) \(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
-                        .padding(.vertical, 6)
-                        .padding(.top, 4)
+                    HStack(spacing: 8) {
+                        // Sentiment label
+                        Text("\(shortClassification)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        
+                        // Sentiment score
+                        Text("\(sentimentScoreInt >= 0 ? "+" : "")\(sentimentScoreInt)")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(sentimentScoreInt >= 0 ? 
+                                (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)) :
+                                (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4))
+                            )
+                        
+                        Spacer()
+                        
+                        // Subtle sentiment indicator
+                        Circle()
+                            .fill(sentimentScoreInt >= 0 ? 
+                                (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)) :
+                                (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4))
+                            )
+                            .frame(width: 6, height: 6)
+                    }
+                    .padding(.vertical, 3)
                 }
                 
                 // Factors
                 if sentiment != nil {
-                    GeometryReader { geo in
-                        let pillWidth = (geo.size.width - 16) / 3 // 8pt gaps between three pills
+                    VStack(spacing: 4) {
+                        // Social
                         HStack(spacing: 8) {
-                            FactorPill(icon: "person.2", title: "Social", percent: socialPercent)
-                                .frame(width: pillWidth)
-                            FactorPill(icon: "newspaper", title: "News", percent: newsPercent)
-                                .frame(width: pillWidth)
-                            FactorPill(icon: "wrench.and.screwdriver", title: "Tech", percent: technicalPercent)
-                                .frame(width: pillWidth)
+                            Text("Social")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .frame(width: 60, alignment: .leading)
+                            
+                            // Progress bar
+                            Rectangle()
+                                .fill(themeManager.isDarkMode ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color(red: 0.9, green: 0.9, blue: 0.92))
+                                .frame(height: 3)
+                                .overlay(
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                                    themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(0, min(100, CGFloat(socialPercent))) * 0.01 * (UIScreen.main.bounds.width - 150), height: 3)
+                                        .clipped()
+                                    , alignment: .leading
+                                )
+                                .cornerRadius(1.5)
+                            
+                            Text("\(socialPercent)%")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                        
+                        // News
+                        HStack(spacing: 8) {
+                            Text("News")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .frame(width: 60, alignment: .leading)
+                            
+                            // Progress bar
+                            Rectangle()
+                                .fill(themeManager.isDarkMode ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color(red: 0.9, green: 0.9, blue: 0.92))
+                                .frame(height: 3)
+                                .overlay(
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                                    themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(0, min(100, CGFloat(newsPercent))) * 0.01 * (UIScreen.main.bounds.width - 150), height: 3)
+                                        .clipped()
+                                    , alignment: .leading
+                                )
+                                .cornerRadius(1.5)
+                            
+                            Text("\(newsPercent)%")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                        
+                        // Technical
+                        HStack(spacing: 8) {
+                            Text("Technical")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                .frame(width: 60, alignment: .leading)
+                            
+                            // Progress bar
+                            Rectangle()
+                                .fill(themeManager.isDarkMode ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color(red: 0.9, green: 0.9, blue: 0.92))
+                                .frame(height: 3)
+                                .overlay(
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                                    themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(width: max(0, min(100, CGFloat(technicalPercent))) * 0.01 * (UIScreen.main.bounds.width - 150), height: 3)
+                                        .clipped()
+                                    , alignment: .leading
+                                )
+                                .cornerRadius(1.5)
+                            
+                            Text("\(technicalPercent)%")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                                .frame(width: 35, alignment: .trailing)
                         }
                     }
-                    .frame(height: 30)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
                 }
                 
-                // Sparkline
-                SparklineMini(data: stock.sparklineData, isPositive: changeIsPositive)
-                    .frame(height: 38)
+                // AI Summary
+                if sentiment != nil {
+                    HStack(spacing: 6) {
+                        // AI Star icon
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                        themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        // AI Summary text
+                        Text(aiSummaryText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+                }
             }
             .contentShape(Rectangle())
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.08), value: isPressed)
-            .padding(16)
+            .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(.ultraThinMaterial)
+                    .fill(
+                        themeManager.isDarkMode ? 
+                            Color(red: 0.12, green: 0.12, blue: 0.15) : 
+                            Color(red: 0.98, green: 0.98, blue: 0.99)
+                    )
             )
             // Inner highlight for glass effect
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.35), Color.white.opacity(0.08)],
+                            colors: [
+                                themeManager.isDarkMode ? Color.white.opacity(0.15) : Color.white.opacity(0.4),
+                                themeManager.isDarkMode ? Color.white.opacity(0.05) : Color.white.opacity(0.1)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -1311,16 +1480,16 @@ struct WatchlistTickerItemView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
-                                themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                                themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                                themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1.2
+                        lineWidth: 1.0
                     )
             )
-            .shadow(color: (themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)).opacity(0.15), radius: 6, x: 0, y: 2)
+            .shadow(color: (themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9)).opacity(0.12), radius: 4, x: 0, y: 1)
             .shadow(
                 color: (themeManager.isDarkMode ? AppTheme.dark.shadows.card.color : AppTheme.light.shadows.card.color).opacity(0.6),
                 radius: themeManager.isDarkMode ? AppTheme.dark.shadows.card.radius : AppTheme.light.shadows.card.radius,
@@ -1348,14 +1517,14 @@ private struct ChangeChip: View {
             Text(changePercentText)
                 .font(.system(size: 11.5, weight: .semibold))
         }
-        .foregroundColor(isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3) : Color(red: 0.9, green: 0.2, blue: 0.3))
+        .foregroundColor(isPositive ? (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)) : (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4)))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
             LinearGradient(
                 colors: [
-                    isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.25) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.25),
-                    isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.1) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.1)
+                    isPositive ? (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)).opacity(0.12) : (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4)).opacity(0.12),
+                    isPositive ? (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)).opacity(0.04) : (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4)).opacity(0.04)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -1363,7 +1532,7 @@ private struct ChangeChip: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isPositive ? Color(red: 0.1, green: 0.8, blue: 0.3).opacity(0.5) : Color(red: 0.9, green: 0.2, blue: 0.3).opacity(0.5), lineWidth: 1.0)
+                .stroke(isPositive ? (themeManager.isDarkMode ? Color(red: 0.3, green: 0.8, blue: 0.5) : Color(red: 0.2, green: 0.7, blue: 0.4)).opacity(0.25) : (themeManager.isDarkMode ? Color(red: 0.9, green: 0.4, blue: 0.5) : Color(red: 0.8, green: 0.3, blue: 0.4)).opacity(0.25), lineWidth: 0.6)
         )
         .cornerRadius(7)
     }
@@ -1466,8 +1635,8 @@ private struct FactorPill: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9),
-                            themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+                            themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9),
+                            themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1489,8 +1658,8 @@ private struct FactorPill: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0).opacity(0.12) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.08),
-                            themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0).opacity(0.06) : Color(red: 0.4, green: 0.3, blue: 0.8).opacity(0.04)
+                            themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95).opacity(0.08) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.08),
+                            themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95).opacity(0.04) : Color(red: 0.4, green: 0.3, blue: 0.8).opacity(0.04)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1499,7 +1668,7 @@ private struct FactorPill: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0).opacity(0.25) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.2), lineWidth: 0.6)
+                .stroke(themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95).opacity(0.2) : Color(red: 0.2, green: 0.5, blue: 0.9).opacity(0.2), lineWidth: 0.5)
         )
         .cornerRadius(10)
         .frame(height: 30)
@@ -1513,14 +1682,14 @@ private struct SparklineMini: View {
     @StateObject private var themeManager = ThemeManager.shared
     
     private var sparklineFillColors: [Color] {
-        let color1 = themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)
-        let color2 = themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
-        return [color1.opacity(0.25), color2.opacity(0.1), Color.clear]
+        let color1 = themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9)
+        let color2 = themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
+        return [color1.opacity(0.2), color2.opacity(0.08), Color.clear]
     }
     
     private var sparklineStrokeColors: [Color] {
-        let color1 = themeManager.isDarkMode ? Color(red: 0.4, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9)
-        let color2 = themeManager.isDarkMode ? Color(red: 0.6, green: 0.4, blue: 1.0) : Color(red: 0.4, green: 0.3, blue: 0.8)
+        let color1 = themeManager.isDarkMode ? Color(red: 0.5, green: 0.7, blue: 0.95) : Color(red: 0.2, green: 0.5, blue: 0.9)
+        let color2 = themeManager.isDarkMode ? Color(red: 0.7, green: 0.5, blue: 0.95) : Color(red: 0.4, green: 0.3, blue: 0.8)
         return [color1, color2]
     }
     
