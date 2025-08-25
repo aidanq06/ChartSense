@@ -40,7 +40,7 @@ struct DiscoverView: View {
                     // Dynamic Content
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(spacing: 24) {
+                            LazyVStack(spacing: 16) {
                                 // Invisible anchor at top for programmatic scrolling
                                 Color.clear.frame(height: 0).id("discoverTopAnchor")
                                 if searchViewModel.isLoading && searchViewModel.searchResults.isEmpty {
@@ -53,6 +53,7 @@ struct DiscoverView: View {
                                 // When searchText is empty, show nothing - clean slate
                             }
                             .padding(.horizontal, 20)
+                            .padding(.top, 8) // Reduced top spacing
                             .padding(.bottom, 100) // Tab bar spacing
                         }
                         .onChange(of: searchText) { _ in
@@ -320,72 +321,6 @@ struct ModernSearchResultsSection: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Enhanced header with animations
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Search Results")
-                        .font(.system(size: 24, weight: .bold, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Text("\(results.count) stocks found")
-                        .font(.system(size: 14, weight: .medium, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                }
-                
-                Spacer()
-                
-                // Animated results count badge
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 40, height: 40)
-                        .scaleEffect(animateResults ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: animateResults)
-                    
-                    Text("\(results.count)")
-                        .font(.system(size: 16, weight: .bold, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
-                                themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(
-                        color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
-                        radius: 8,
-                        x: 0,
-                        y: 4
-                    )
-            )
-            
             // Enhanced results list with staggered animations
             LazyVStack(spacing: 12) {
                 ForEach(Array(results.enumerated()), id: \.element.id) { index, stock in
@@ -407,7 +342,7 @@ struct ModernSearchResultsSection: View {
     }
 }
 
-// MARK: - Enhanced Stock Card
+// MARK: - Enhanced Stock Card (Updated with Modern Watchlist Design)
 struct EnhancedStockCard: View {
     let stock: Stock
     let index: Int
@@ -418,96 +353,35 @@ struct EnhancedStockCard: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var shimmerOffset: CGFloat = -200
     
-    private var sparklinePrices: [Double] {
-        return stock.sparklineData
-    }
-    
-    private var isPositiveChange: Bool {
-        return stock.dailyChangePercent >= 0
-    }
-    
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 appViewModel.selectStock(stock)
             }
         }) {
-            ZStack {
-                // Animated background with gradient
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: isPressed ? 
-                                [
-                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F0F0F0"),
-                                    themeManager.isDarkMode ? Color(hex: "3A3A3A") : Color(hex: "E8E8E8")
-                                ] :
-                                [
-                                    themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white,
-                                    themeManager.isDarkMode ? Color(hex: "2A2A2A") : Color(hex: "F8F9FA")
-                                ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: isPositiveChange ? 
-                                        [Color.green.opacity(0.3), Color.blue.opacity(0.2)] :
-                                        [Color.red.opacity(0.3), Color.orange.opacity(0.2)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: isPressed ? 2 : 1
-                            )
-                    )
-                    .shadow(
-                        color: themeManager.isDarkMode ? Color.black.opacity(0.3) : Color.black.opacity(0.08),
-                        radius: isPressed ? 12 : 8,
-                        x: 0,
-                        y: isPressed ? 6 : 4
-                    )
-                    .scaleEffect(isPressed ? 0.98 : 1.0)
-                
-                // Shimmer effect on press
-                if isPressed {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    Color.white.opacity(0.1),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .offset(x: shimmerOffset)
-                        .clipped()
-                }
-                
-                HStack(spacing: 16) {
-                    // Enhanced stock info section
+            // Minimalistic, clean design that's still extremely nice
+            HStack(spacing: 0) {
+                // Left: Stock info (clickable for selection)
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        appViewModel.selectStock(stock)
+                    }
+                }) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Text(stock.symbol)
                                 .font(.system(size: 18, weight: .bold, design: .default))
                                 .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                             
-                            // Animated change indicator
+                            // Subtle change indicator
                             ZStack {
                                 Circle()
-                                    .fill(isPositiveChange ? Color.green.opacity(0.2) : Color.red.opacity(0.2))
-                                    .frame(width: 24, height: 24)
-                                    .scaleEffect(pulseScale)
-                                    .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: pulseScale)
+                                    .fill(stock.isPositiveChange ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                                    .frame(width: 20, height: 20)
                                 
-                                Image(systemName: isPositiveChange ? "arrow.up" : "arrow.down")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(isPositiveChange ? Color.green : Color.red)
+                                Image(systemName: stock.isPositiveChange ? "arrow.up" : "arrow.down")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(stock.isPositiveChange ? Color.green : Color.red)
                             }
                         }
                         
@@ -516,43 +390,56 @@ struct EnhancedStockCard: View {
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
                             .lineLimit(1)
                     }
-                    
-                    Spacer()
-                    
-                    // Enhanced price and change section
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Text(stock.formattedPrice)
-                            .font(.system(size: 18, weight: .bold, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        HStack(spacing: 4) {
-                            Text(isPositiveChange ? "+" : "")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(isPositiveChange ? Color.green : Color.red)
-                            
-                            Text(String(format: "%.2f%%", abs(stock.dailyChangePercent)))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(isPositiveChange ? Color.green : Color.red)
-                        }
-                    }
-                    
-                    // Enhanced sparkline with animation
-                    VStack {
-                        MiniSparklineView(prices: sparklinePrices, isPositive: isPositiveChange)
-                            .frame(width: 60, height: 30)
-                            .scaleEffect(animateCard ? 1.05 : 1.0)
-                            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: animateCard)
-                    }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .buttonStyle(PlainButtonStyle())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Right: Price and change - clean and minimal
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(stock.formattedPrice)
+                        .font(.system(size: 18, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                    
+                    // Clean change indicator
+                    HStack(spacing: 4) {
+                        Text(stock.isPositiveChange ? "+" : "")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(stock.isPositiveChange ? Color.green : Color.red)
+                        
+                        Text(String(format: "%.2f%%", abs(stock.dailyChangePercent)))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(stock.isPositiveChange ? Color.green : Color.red)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(stock.isPositiveChange ? Color.green.opacity(0.08) : Color.red.opacity(0.08))
+                    )
+                }
+                .frame(width: 120, alignment: .trailing)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                    )
+            )
+            .cornerRadius(16)
+            .shadow(
+                color: themeManager.isDarkMode ? Color.black.opacity(0.08) : Color.black.opacity(0.04),
+                radius: 6,
+                x: 0,
+                y: 2
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .onAppear {
-            animateCard = true
-            pulseScale = 1.0
-        }
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isPressed)
         .onLongPressGesture(minimumDuration: 0) { pressing in
             withAnimation(.easeInOut(duration: 0.1)) {
                 isPressed = pressing
@@ -571,46 +458,7 @@ struct EnhancedStockCard: View {
     }
 }
 
-// MARK: - Mini Sparkline View
-struct MiniSparklineView: View {
-    let prices: [Double]
-    let isPositive: Bool
-    @StateObject private var themeManager = ThemeManager.shared
-    
-    var body: some View {
-        GeometryReader { geometry in
-            Path { path in
-                guard prices.count > 1 else { return }
-                
-                let width = geometry.size.width
-                let height = geometry.size.height
-                
-                // Find min and max for scaling
-                let minPrice = prices.min() ?? 0
-                let maxPrice = prices.max() ?? 1
-                let priceRange = maxPrice - minPrice
-                
-                // Calculate points
-                let points = prices.enumerated().map { index, price in
-                    let x = (CGFloat(index) / CGFloat(prices.count - 1)) * width
-                    let normalizedPrice = priceRange > 0 ? (price - minPrice) / priceRange : 0.5
-                    let y = height - (normalizedPrice * height)
-                    return CGPoint(x: x, y: y)
-                }
-                
-                // Draw the line
-                path.move(to: points[0])
-                for point in points.dropFirst() {
-                    path.addLine(to: point)
-                }
-            }
-            .stroke(
-                isPositive ? Color.green : Color.red,
-                style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round)
-            )
-        }
-    }
-}
+
 
 // MARK: - Modern Stock Card
 struct ModernStockCard: View {
@@ -618,11 +466,6 @@ struct ModernStockCard: View {
     @EnvironmentObject private var appViewModel: AppViewModel
     @StateObject private var themeManager = ThemeManager.shared
     @State private var isPressed = false
-    
-    // Use actual price history from stock model
-    private var sparklinePrices: [Double] {
-        return stock.sparklineData
-    }
     
     private var isPositiveChange: Bool {
         return stock.dailyChangePercent >= 0
