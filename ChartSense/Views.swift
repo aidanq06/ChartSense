@@ -35,7 +35,7 @@ struct DiscoverView: View {
                         }
                     )
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 12) // Reduced from 24 to 12
                     
                     // Dynamic Content
                     ScrollViewReader { proxy in
@@ -53,7 +53,7 @@ struct DiscoverView: View {
                                 // When searchText is empty, show nothing - clean slate
                             }
                             .padding(.horizontal, 20)
-                            .padding(.top, 8) // Reduced top spacing
+                            .padding(.top, 4) // Reduced from 8 to 4
                             .padding(.bottom, 100) // Tab bar spacing
                         }
                         .onChange(of: searchText) { _ in
@@ -1262,28 +1262,36 @@ struct SentimentFocusedWatchlistSection: View {
                 
                 Spacer()
                 
-                // Clean Edit Button
+                // Edit Button - Consistent with Watchlist Item Design
                 Button(action: onEditWatchlist) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                         
                         Text("Edit")
-                            .font(.system(size: 12, weight: .medium, design: .default))
+                            .font(.system(size: 14, weight: .medium, design: .default))
                             .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.1) : AppTheme.light.colors.primary.opacity(0.1))
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                            )
                     )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.primary.opacity(0.3) : AppTheme.light.colors.primary.opacity(0.3), lineWidth: 1)
+                    .cornerRadius(16)
+                    .shadow(
+                        color: themeManager.isDarkMode ? Color.black.opacity(0.08) : Color.black.opacity(0.04),
+                        radius: 6,
+                        x: 0,
+                        y: 2
                     )
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             
             // Content based on watchlist state
@@ -1973,7 +1981,7 @@ struct EnhancedSentimentAlertsSection: View {
     }
 }
 
-// MARK: - Enhanced Sentiment Alert Card
+// MARK: - Enhanced Sentiment Alert Card (Updated with Consistent Design)
 struct EnhancedSentimentAlertCard: View {
     let alert: SentimentAlert
     @StateObject private var themeManager = ThemeManager.shared
@@ -1984,63 +1992,84 @@ struct EnhancedSentimentAlertCard: View {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
         }) {
-            HStack(spacing: 16) {
-                // Custom icon with unique design
-                ZStack {
-                    Circle()
-                        .fill(alertColor.opacity(0.2))
-                        .frame(width: 40, height: 40)
+            // Use the same design structure as watchlist items
+            HStack(spacing: 0) {
+                // Left: Alert info (using same layout as stock info)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        // Alert icon with consistent sizing
+                        ZStack {
+                            Circle()
+                                .fill(alertColor.opacity(0.15))
+                                .frame(width: 24, height: 24)
+                            
+                            Image(systemName: alertIcon)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(alertColor)
+                        }
+                        
+                        // Alert message (like stock symbol)
+                        Text(alert.message)
+                            .font(.system(size: 16, weight: .semibold, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+                            .lineLimit(1)
+                    }
                     
-                    Image(systemName: alertIcon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(alertColor)
-                        .rotationEffect(.degrees(isPressed ? 15 : 0))
-                        .animation(.easeInOut(duration: 0.2), value: isPressed)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(alert.message)
-                        .font(.system(size: 16, weight: .semibold, design: .default))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .lineLimit(2)
-                    
+                    // Time and severity (like company name)
                     Text("\(alert.timeAgo) • \(alert.severity)")
-                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .font(.system(size: 14, weight: .medium, design: .default))
                         .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
-                Spacer()
-                
-                // Custom change indicator
-                VStack(alignment: .trailing, spacing: 2) {
+                // Right: Change percentage (like price and change)
+                VStack(alignment: .trailing, spacing: 6) {
+                    // Change percentage (like price)
                     Text("\(alert.change, specifier: "%.1f")%")
-                        .font(.system(size: 14, weight: .bold, design: .default))
+                        .font(.system(size: 18, weight: .bold, design: .default))
                         .foregroundColor(alertColor)
                     
-                    Image(systemName: alert.change >= 0 ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(alertColor)
+                    // Change indicator (like percentage change)
+                    HStack(spacing: 4) {
+                        Text(alert.change >= 0 ? "+" : "")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(alertColor)
+                        
+                        Text(String(format: "%.1f%%", abs(alert.change)))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(alertColor)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(alertColor.opacity(0.08))
+                    )
                 }
+                .frame(width: 120, alignment: .trailing)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(alertColor.opacity(0.2), lineWidth: 1)
+                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
                     )
             )
+            .cornerRadius(16)
             .shadow(
-                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
-                radius: 8,
+                color: themeManager.isDarkMode ? Color.black.opacity(0.08) : Color.black.opacity(0.04),
+                radius: 6,
                 x: 0,
-                y: 4
+                y: 2
             )
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isPressed)
         .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
             isPressed = pressing
         }, perform: {})

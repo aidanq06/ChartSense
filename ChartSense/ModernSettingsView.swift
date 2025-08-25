@@ -90,9 +90,6 @@ struct ModernSettingsView: View {
             .sheet(isPresented: $viewModel.showingProfileEditor) {
                 ProfileEditorView()
             }
-            .sheet(isPresented: $viewModel.showingDataExport) {
-                DataExportView()
-            }
             .sheet(isPresented: $premiumManager.showingPremiumUpgrade) {
                 PremiumUpgradeView()
             }
@@ -230,7 +227,7 @@ struct ModernSettingsHeader: View {
     }
 }
 
-// MARK: - Essential Settings Section
+// MARK: - Essential Settings Section (Streamlined)
 struct EssentialSettingsSection: View {
     @StateObject private var viewModel = ModernSettingsViewModel()
     @StateObject private var themeManager = ThemeManager.shared
@@ -246,53 +243,11 @@ struct EssentialSettingsSection: View {
                         icon: "moon.fill",
                         isOn: $viewModel.isDarkMode
                     )
-                    
-                    ModernToggleCard(
-                        title: "Compact Layout",
-                        subtitle: "Use condensed view for more data",
-                        icon: "rectangle.compress.vertical",
-                        isOn: $viewModel.compactLayout
-                    )
                 }
             }
             
-            // Notifications Section
-            ModernSettingsSection(title: "Notifications", icon: "bell.fill") {
-                VStack(spacing: 12) {
-                    ModernToggleCard(
-                        title: "Push Notifications",
-                        subtitle: "Receive alerts for important updates",
-                        icon: "bell.fill",
-                        isOn: $viewModel.notificationsEnabled
-                    )
-                    
-                    if viewModel.notificationsEnabled {
-                        ModernToggleCard(
-                            title: "Price Alerts",
-                            subtitle: "Get notified when stocks hit your targets",
-                            icon: "dollarsign.circle.fill",
-                            isOn: $viewModel.priceAlertsEnabled
-                        )
-                        
-                        ModernToggleCard(
-                            title: "Market Open Alerts",
-                            subtitle: "Daily market opening notifications",
-                            icon: "clock.fill",
-                            isOn: $viewModel.marketOpenAlerts
-                        )
-                        
-                        ModernToggleCard(
-                            title: "News Alerts",
-                            subtitle: "Breaking news and market updates",
-                            icon: "newspaper.fill",
-                            isOn: $viewModel.newsAlertsEnabled
-                        )
-                    }
-                }
-            }
-            
-            // Trading Section
-            ModernSettingsSection(title: "Trading", icon: "chart.line.uptrend.xyaxis") {
+            // Core Features Section
+            ModernSettingsSection(title: "Core Features", icon: "star.fill") {
                 VStack(spacing: 12) {
                     ModernToggleCard(
                         title: "Real-time Data",
@@ -302,17 +257,10 @@ struct EssentialSettingsSection: View {
                     )
                     
                     ModernToggleCard(
-                        title: "Extended Hours",
-                        subtitle: "Show pre/post market data",
-                        icon: "clock.arrow.circlepath",
-                        isOn: $viewModel.extendedHours
-                    )
-                    
-                    ModernToggleCard(
-                        title: "Auto-refresh",
-                        subtitle: "Automatically update data every 30 seconds",
-                        icon: "arrow.clockwise",
-                        isOn: $viewModel.autoRefresh
+                        title: "AI Insights",
+                        subtitle: "Show AI-powered sentiment analysis",
+                        icon: "brain.head.profile",
+                        isOn: $viewModel.aiInsightsEnabled
                     )
                 }
             }
@@ -325,13 +273,6 @@ struct EssentialSettingsSection: View {
                         subtitle: "Help improve the app with usage data",
                         icon: "chart.bar.fill",
                         isOn: $viewModel.analyticsEnabled
-                    )
-                    
-                    ModernToggleCard(
-                        title: "Crash Reports",
-                        subtitle: "Send crash reports to help fix issues",
-                        icon: "exclamationmark.triangle.fill",
-                        isOn: $viewModel.crashReports
                     )
                 }
             }
@@ -432,7 +373,7 @@ struct ModernToggleCard: View {
     }
 }
 
-// MARK: - Account Support Section
+// MARK: - Account Support Section (Streamlined)
 struct AccountSupportSection: View {
     @StateObject private var viewModel = ModernSettingsViewModel()
     @StateObject private var themeManager = ThemeManager.shared
@@ -450,15 +391,6 @@ struct AccountSupportSection: View {
                         color: .blue
                     ) {
                         viewModel.showingProfileEditor = true
-                    }
-                    
-                    ModernActionCard(
-                        title: "Export Data",
-                        subtitle: "Download your data and settings",
-                        icon: "square.and.arrow.up.fill",
-                        color: .green
-                    ) {
-                        viewModel.showingDataExport = true
                     }
                     
                     ModernActionCard(
@@ -485,6 +417,7 @@ struct AccountSupportSection: View {
                         Task { await PremiumManager.shared.debugForceDowngradeToFree() }
                     }
                     #endif
+                    
                     ModernActionCard(
                         title: "Help & FAQ",
                         subtitle: "Get help and find answers",
@@ -499,33 +432,6 @@ struct AccountSupportSection: View {
                         subtitle: "Get in touch with our team",
                         icon: "envelope.fill",
                         color: .orange
-                    ) {
-                        // Action
-                    }
-                    
-                    ModernActionCard(
-                        title: "Rate App",
-                        subtitle: "Share your feedback",
-                        icon: "star.fill",
-                        color: .yellow
-                    ) {
-                        // Action
-                    }
-                    
-                    ModernActionCard(
-                        title: "Terms of Service",
-                        subtitle: "Read our terms and conditions",
-                        icon: "doc.text.fill",
-                        color: .gray
-                    ) {
-                        // Action
-                    }
-                    
-                    ModernActionCard(
-                        title: "Privacy Policy",
-                        subtitle: "Learn about data protection",
-                        icon: "hand.raised.fill",
-                        color: .blue
                     ) {
                         // Action
                     }
@@ -545,19 +451,10 @@ struct AccountSupportSection: View {
                     }
                     
                     ModernActionCard(
-                        title: "What's New",
-                        subtitle: "See recent updates and features",
-                        icon: "sparkles",
-                        color: .purple
-                    ) {
-                        // Action
-                    }
-                    
-                    ModernActionCard(
-                        title: "Open Source",
-                        subtitle: "View third-party licenses",
-                        icon: "doc.on.doc.fill",
-                        color: .orange
+                        title: "Privacy Policy",
+                        subtitle: "Learn about data protection",
+                        icon: "hand.raised.fill",
+                        color: .blue
                     ) {
                         // Action
                     }
