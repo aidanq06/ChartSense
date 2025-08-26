@@ -341,42 +341,38 @@ struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
     var body: some View {
-        let primary = themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary
-        let secondary = themeManager.isDarkMode ? AppTheme.dark.colors.secondary : AppTheme.light.colors.secondary
-        GeometryReader { geo in
-            let count = ChartRange.allCases.count
-            let spacing: CGFloat = 12
-            let height: CGFloat = 40
-            let totalSpacing = spacing * CGFloat(max(0, count - 1))
-            let buttonWidth = max(62, floor((geo.size.width - totalSpacing) / CGFloat(count)))
-            HStack(spacing: spacing) {
-                ForEach(ChartRange.allCases, id: \.self) { r in
-                    let isSelected = (range == r)
-                    Button(action: { Haptics.selection(); withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) { range = r } }) {
-                        ZStack {
-                            let shapeFill: AnyShapeStyle = isSelected
-                                ? AnyShapeStyle(LinearGradient(colors: [primary, secondary], startPoint: .leading, endPoint: .trailing))
-                                : AnyShapeStyle(primary.opacity(0.10))
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(shapeFill)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(isSelected ? Color.clear : primary.opacity(0.15), lineWidth: 1)
-                                )
-                                .shadow(color: primary.opacity(isSelected ? 0.22 : 0), radius: isSelected ? 10 : 0, x: 0, y: 5)
-                            Text(r.display)
-                                .font(.system(size: 13.5, weight: .semibold))
-                                .foregroundColor(isSelected ? .white : primary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: buttonWidth, height: height)
-                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        HStack(spacing: 16) {
+            ForEach(ChartRange.allCases, id: \.self) { r in
+                let isSelected = (range == r)
+                Button(action: { 
+                    Haptics.selection()
+                    withAnimation(.easeInOut(duration: 0.2)) { 
+                        range = r 
+                    } 
+                }) {
+                    Text(r.display)
+                        .font(.system(size: 14, weight: isSelected ? .semibold : .regular, design: .default))
+                        .foregroundColor(
+                            isSelected 
+                            ? (themeManager.isDarkMode ? .white : .black)
+                            : (themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
+                        )
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(isSelected ? Color.black.opacity(0.1) : Color.clear)
+                        )
                 }
+                .buttonStyle(.plain)
             }
-            .frame(width: geo.size.width, height: height)
         }
-        .frame(height: 44)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.05) : Color.white.opacity(0.8))
+        )
     }
 }
 

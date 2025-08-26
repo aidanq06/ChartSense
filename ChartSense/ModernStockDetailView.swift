@@ -70,7 +70,7 @@ struct ModernStockDetailView: View {
     @State private var overrideChange: Double? = nil
     @State private var overridePercent: Double? = nil
     
-    private let tabs = ["Chart", "Sentiment", "Analysis", "Community"]
+    private let tabs = ["Chart", "Sentiment", "Insights"]
     
     init(stock: Stock) {
         self.stock = stock
@@ -79,7 +79,7 @@ struct ModernStockDetailView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Professional Header
+            // Ultra-Minimal Header
             ModernStockDetailHeader(
                 stock: currentStock,
                 onBack: { dismiss() },
@@ -90,13 +90,13 @@ struct ModernStockDetailView: View {
                 isScrubbing: isScrubbing
             )
             
-            // Modern Tab Navigation
+            // Ultra-Minimal Tab Navigation
             ModernTabBar(
                 tabs: tabs,
                 selectedTab: $selectedTab
             )
             
-            // Tab Content
+            // Tab Content with Clean Spacing
             TabView(selection: $selectedTab) {
                 // Chart Tab
                 UltraCleanChartTab(
@@ -128,16 +128,12 @@ struct ModernStockDetailView: View {
                 SentimentAnalysisTab(stock: currentStock)
                     .tag(1)
 
-                // Analysis Tab
-                ComprehensiveAnalysisTab(stock: currentStock)
+                // Insights Tab - Combined Analysis & Community
+                ComprehensiveInsightsTab(stock: currentStock)
                     .tag(2)
-
-                // Community Tab
-                CommunityInsightsTab(stock: currentStock)
-                    .tag(3)
             }
             .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.3), value: selectedTab)
+            .animation(.easeInOut(duration: 0.2), value: selectedTab)
             // Reserve space so the bottom overlay doesn't overlap the chart
             .padding(.bottom, selectedTab == 0 ? 68 : 0)
         }
@@ -345,7 +341,7 @@ struct AnimatedChangeText: View {
     }
 }
 
-// MARK: - Professional Stock Header
+// MARK: - Ultra-Minimal Stock Header
 struct ModernStockDetailHeader: View {
     let stock: Stock
     let onBack: () -> Void
@@ -361,17 +357,16 @@ struct ModernStockDetailHeader: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Navigation Bar
-            HStack(spacing: 12) {
+            // Minimal Navigation Bar
+            HStack(spacing: 0) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        .frame(width: 34, height: 34)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                        .frame(width: 32, height: 32)
                         .background(
                             Circle()
-                                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.black.opacity(0.05))
                         )
                 }
                 
@@ -387,36 +382,36 @@ struct ModernStockDetailHeader: View {
                     }
                 }) {
                     Image(systemName: watchlistViewModel.isStockInWatchlist(stock.symbol) ? "heart.fill" : "heart")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(watchlistViewModel.isStockInWatchlist(stock.symbol) ? .red : (themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText))
-                        .frame(width: 34, height: 34)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(watchlistViewModel.isStockInWatchlist(stock.symbol) ? .red : (themeManager.isDarkMode ? .white : .black))
+                        .frame(width: 32, height: 32)
                         .background(
                             Circle()
-                                .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
-                                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.black.opacity(0.05))
                         )
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
             
-            // Professional Stock Information (ticker left; company and price underneath)
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+            // Clean Stock Information Layout
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
                     // Ticker
                     Text(stock.symbol)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    // Company under ticker
+                        .font(.system(size: 32, weight: .bold, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                        .tracking(-0.5)
+                    
+                    // Company Name
                     Text(stock.companyName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                        .font(.system(size: 15, weight: .regular, design: .default))
+                        .foregroundColor(themeManager.isDarkMode ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    // Price and change under company
-                    VStack(alignment: .leading, spacing: 4) {
-                        // While scrubbing (or during snap-back), derive change from the override price.
-                        // Otherwise, show the stock's canonical daily change values to ensure perfect match.
+                    
+                    // Price and Change
+                    VStack(alignment: .leading, spacing: 6) {
                         let usingOverride = isScrubbing || overridePrice != nil || overrideChange != nil || overridePercent != nil
                         let livePrice = overridePrice ?? stock.currentPrice
                         let baseline = stock.currentPrice - stock.dailyChange
@@ -425,14 +420,17 @@ struct ModernStockDetailHeader: View {
                             ? (overridePercent ?? (baseline == 0 ? 0 : (changeValue / baseline * 100.0)))
                             : stock.dailyChangePercent
                         let isPositive = changeValue >= 0
+                        
                         SmoothPriceTransition(
                             price: livePrice,
                             isAnimating: usingOverride
                         )
-                        HStack(spacing: 6) {
+                        
+                        HStack(spacing: 8) {
                             Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(isPositive ? Color.bullish : Color.bearish)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isPositive ? Color.green : Color.red)
+                            
                             SmoothChangeText(
                                 change: changeValue,
                                 percent: percentValue,
@@ -445,13 +443,13 @@ struct ModernStockDetailHeader: View {
                 Spacer()
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .padding(.bottom, 20)
         }
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
     }
 }
 
-// MARK: - Modern Tab Bar
+// MARK: - Ultra-Minimal Tab Bar
 struct ModernTabBar: View {
     let tabs: [String]
     @Binding var selectedTab: Int
@@ -461,24 +459,26 @@ struct ModernTabBar: View {
         HStack(spacing: 0) {
             ForEach(0..<tabs.count, id: \.self) { index in
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
                         selectedTab = index
                     }
                 }) {
-                    VStack(spacing: 10) {
+                    VStack(spacing: 0) {
                         Text(tabs[index])
-                            .font(.system(size: 16, weight: selectedTab == index ? .semibold : .medium))
+                            .font(.system(size: 15, weight: selectedTab == index ? .semibold : .regular, design: .default))
                             .foregroundColor(
                                 selectedTab == index 
-                                ? (themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
-                                : (themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                                ? (themeManager.isDarkMode ? .white : .black)
+                                : (themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
                             )
-                        Capsule()
-                            .fill(
-                                LinearGradient(colors: [Color.blue, Color.purple], startPoint: .leading, endPoint: .trailing)
-                                    .opacity(selectedTab == index ? 1.0 : 0.0)
-                            )
-                            .frame(height: 3)
+                            .padding(.vertical, 16)
+                            .padding(.horizontal, 8)
+                        
+                        // Minimal active indicator
+                        Rectangle()
+                            .fill(selectedTab == index ? Color.black : Color.clear)
+                            .frame(height: 1)
+                            .opacity(themeManager.isDarkMode ? 0.3 : 0.2)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -486,9 +486,7 @@ struct ModernTabBar: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 16)
         .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
-        // Removed bottom divider for a seamless transition into content
     }
 }
 
@@ -1082,25 +1080,25 @@ struct SentimentLoadingView: View {
 
 
 
-// MARK: - Comprehensive Analysis Tab
-struct ComprehensiveAnalysisTab: View {
+// MARK: - Comprehensive Insights Tab
+struct ComprehensiveInsightsTab: View {
     let stock: Stock
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 24) {
-                // Technical Analysis
-                TechnicalAnalysisCard(stock: stock)
+            LazyVStack(spacing: 20) {
+                // Market Insights Summary
+                MarketInsightsSummaryCard(stock: stock)
                 
-                // Fundamental Analysis
-                FundamentalAnalysisCard(stock: stock)
+                // Technical Indicators
+                TechnicalIndicatorsCard(stock: stock)
                 
-                // Analyst Ratings
-                AnalystRatingsCard(stock: stock)
+                // Social Sentiment Overview
+                SocialSentimentOverviewCard(stock: stock)
                 
-                // Price Targets
-                PriceTargetsCard(stock: stock)
+                // AI Recommendations
+                AIRecommendationsCard(stock: stock)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
@@ -1108,109 +1106,273 @@ struct ComprehensiveAnalysisTab: View {
     }
 }
 
-// MARK: - Technical Analysis Card
-struct TechnicalAnalysisCard: View {
+// MARK: - Market Insights Summary Card
+struct MarketInsightsSummaryCard: View {
     let stock: Stock
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
-        NotionCard {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
-                HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.blue)
-                    
-                    Text("Technical Analysis")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                    
-                    Spacer()
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.yellow)
                 
-                // Technical Indicators
-                VStack(spacing: 16) {
-                    TechnicalIndicatorRow(name: "RSI (14)", value: "65.4", status: .neutral, description: "Approaching overbought territory")
-                    TechnicalIndicatorRow(name: "MACD", value: "0.23", status: .bullish, description: "Bullish crossover signal")
-                    TechnicalIndicatorRow(name: "MA (20)", value: stock.formattedPrice, status: .bullish, description: "Price above moving average")
-                    TechnicalIndicatorRow(name: "Bollinger Bands", value: "Mid", status: .neutral, description: "Trading within bands")
-                }
+                Text("Market Insights")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
                 
-                // Summary
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Technical Outlook")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
-                        
-                        Text("Mixed signals with bullish momentum but approaching resistance levels. Watch for breakout confirmation.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
-                            .lineLimit(nil)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.top, 8)
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                InsightRow(
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "Trend Analysis",
+                    description: "Strong upward momentum with support at $195",
+                    color: .green
+                )
+                
+                InsightRow(
+                    icon: "person.3.fill",
+                    title: "Social Sentiment",
+                    description: "Positive community sentiment (78% bullish)",
+                    color: .blue
+                )
+                
+                InsightRow(
+                    icon: "newspaper.fill",
+                    title: "News Impact",
+                    description: "Recent earnings beat driving positive momentum",
+                    color: .purple
+                )
             }
         }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.white.opacity(0.9))
+        )
     }
 }
 
-// MARK: - Technical Indicator Row
-struct TechnicalIndicatorRow: View {
-    let name: String
-    let value: String
-    let status: IndicatorStatus
+// MARK: - Insight Row
+struct InsightRow: View {
+    let icon: String
+    let title: String
     let description: String
+    let color: Color
     @StateObject private var themeManager = ThemeManager.shared
     
-    enum IndicatorStatus {
-        case bullish, bearish, neutral
-        
-        var color: Color {
-            switch self {
-            case .bullish: return Color.bullish
-            case .bearish: return Color.bearish
-            case .neutral: return .orange
-            }
-        }
-        
-        var icon: String {
-            switch self {
-            case .bullish: return "arrow.up.circle.fill"
-            case .bearish: return "arrow.down.circle.fill"
-            case .neutral: return "minus.circle.fill"
-            }
-        }
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 20, height: 20)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
                 
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    Text(value)
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(status.color)
-                    
-                    Image(systemName: status.icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(status.color)
-                }
+                Text(description)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(themeManager.isDarkMode ? Color.white.opacity(0.7) : Color.black.opacity(0.7))
+                    .lineLimit(2)
             }
             
-            Text(description)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+            Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Technical Indicators Card
+struct TechnicalIndicatorsCard: View {
+    let stock: Stock
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.blue)
+                
+                Text("Technical Indicators")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                
+                Spacer()
+            }
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                IndicatorChip(title: "RSI", value: "68", color: .orange)
+                IndicatorChip(title: "MACD", value: "Bullish", color: .green)
+                IndicatorChip(title: "MA20", value: "Above", color: .blue)
+                IndicatorChip(title: "Volume", value: "High", color: .purple)
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.white.opacity(0.9))
+        )
+    }
+}
+
+// MARK: - Indicator Chip
+struct IndicatorChip: View {
+    let title: String
+    let value: String
+    let color: Color
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
+            
+            Text(value)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.05) : Color.white.opacity(0.5))
+        )
+    }
+}
+
+// MARK: - Social Sentiment Overview Card
+struct SocialSentimentOverviewCard: View {
+    let stock: Stock
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.blue)
+                
+                Text("Social Sentiment")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                
+                Spacer()
+            }
+            
+            HStack(spacing: 20) {
+                SentimentMetric(title: "Reddit", value: "78%", color: .orange)
+                SentimentMetric(title: "Twitter", value: "82%", color: .blue)
+                SentimentMetric(title: "Overall", value: "80%", color: .green)
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.white.opacity(0.9))
+        )
+    }
+}
+
+// MARK: - Sentiment Metric
+struct SentimentMetric: View {
+    let title: String
+    let value: String
+    let color: Color
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(themeManager.isDarkMode ? Color.white.opacity(0.6) : Color.black.opacity(0.6))
+            
+            Text(value)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - AI Recommendations Card
+struct AIRecommendationsCard: View {
+    let stock: Stock
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.purple)
+                
+                Text("AI Recommendations")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(themeManager.isDarkMode ? .white : .black)
+                
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                RecommendationRow(
+                    icon: "arrow.up.circle.fill",
+                    text: "Strong buy signal based on technical momentum",
+                    color: .green
+                )
+                
+                RecommendationRow(
+                    icon: "eye.fill",
+                    text: "Watch for resistance at $210 level",
+                    color: .orange
+                )
+                
+                RecommendationRow(
+                    icon: "chart.bar.fill",
+                    text: "Volume supports current trend continuation",
+                    color: .blue
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.isDarkMode ? Color.black.opacity(0.1) : Color.white.opacity(0.9))
+        )
+    }
+}
+
+// MARK: - Recommendation Row
+struct RecommendationRow: View {
+    let icon: String
+    let text: String
+    let color: Color
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 20, height: 20)
+            
+            Text(text)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(themeManager.isDarkMode ? Color.white.opacity(0.8) : Color.black.opacity(0.8))
+                .lineLimit(2)
+            
+            Spacer()
+        }
     }
 }
 

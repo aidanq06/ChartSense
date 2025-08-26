@@ -1262,34 +1262,37 @@ struct SentimentFocusedWatchlistSection: View {
                 
                 Spacer()
                 
-                // Edit Button - Consistent with Watchlist Item Design
+                // Edit Button - Minimalistic & Clean with Enhanced Colors
                 Button(action: onEditWatchlist) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(themeManager.isDarkMode ? Color(red: 0.6, green: 0.8, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9))
                         
                         Text("Edit")
-                            .font(.system(size: 14, weight: .medium, design: .default))
-                            .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primary : AppTheme.light.colors.primary)
+                            .font(.system(size: 13, weight: .medium, design: .default))
+                            .foregroundColor(themeManager.isDarkMode ? Color(red: 0.6, green: 0.8, blue: 1.0) : Color(red: 0.2, green: 0.5, blue: 0.9))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                themeManager.isDarkMode ? 
+                                    Color(red: 0.1, green: 0.2, blue: 0.3).opacity(0.6) : 
+                                    Color(red: 0.95, green: 0.97, blue: 1.0).opacity(0.9)
+                            )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(
+                                        themeManager.isDarkMode ? 
+                                            Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.4) : 
+                                            Color(red: 0.3, green: 0.6, blue: 0.9).opacity(0.3),
+                                        lineWidth: 0.5
+                                    )
                             )
                     )
-                    .cornerRadius(16)
-                    .shadow(
-                        color: themeManager.isDarkMode ? Color.black.opacity(0.08) : Color.black.opacity(0.04),
-                        radius: 6,
-                        x: 0,
-                        y: 2
-                    )
+                    .cornerRadius(8)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -1944,21 +1947,20 @@ struct EnhancedSentimentAlertsSection: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("SENTIMENT ALERTS")
-                    .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .font(.system(size: 14, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     .tracking(1.5)
                 
                 Spacer()
                 
-                // Custom indicator
-                HStack(spacing: 3) {
+                // Minimal indicator
+                HStack(spacing: 2) {
                     ForEach(0..<min(alerts.count, 3)) { index in
-                        Rectangle()
-                            .fill(Color.orange)
-                            .frame(width: 3, height: 12)
-                            .cornerRadius(1.5)
-                            .scaleEffect(animateAlerts ? 1.0 : 0.8)
-                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateAlerts)
+                        Circle()
+                            .fill(Color.red.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(animateAlerts ? 1.0 : 0.7)
+                            .animation(.easeInOut(duration: 0.4).delay(Double(index) * 0.1), value: animateAlerts)
                     }
                 }
             }
@@ -2052,17 +2054,24 @@ struct EnhancedSentimentAlertCard: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(themeManager.isDarkMode ? AppTheme.dark.colors.cardBackground : AppTheme.light.colors.cardBackground)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        themeManager.isDarkMode ? 
+                            Color(red: 0.08, green: 0.08, blue: 0.08).opacity(0.98) : 
+                            Color(red: 0.98, green: 0.98, blue: 0.98).opacity(0.98)
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(themeManager.isDarkMode ? AppTheme.dark.colors.border : AppTheme.light.colors.border, lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                Color.red.opacity(0.2),
+                                lineWidth: 0.5
+                            )
                     )
             )
-            .cornerRadius(16)
+            .cornerRadius(12)
             .shadow(
-                color: themeManager.isDarkMode ? Color.black.opacity(0.08) : Color.black.opacity(0.04),
-                radius: 6,
+                color: Color.black.opacity(0.08),
+                radius: 4,
                 x: 0,
                 y: 2
             )
@@ -2108,21 +2117,20 @@ struct PremiumNewsFeedSection: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("MARKET NEWS")
-                    .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .font(.system(size: 14, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     .tracking(1.5)
                 
                 Spacer()
                 
-                // Custom news indicator
-                HStack(spacing: 3) {
+                // Minimal indicator
+                HStack(spacing: 2) {
                     ForEach(0..<min(news.count, 3)) { index in
-                        Rectangle()
-                            .fill(Color.blue)
-                            .frame(width: 3, height: 8)
-                            .cornerRadius(1.5)
-                            .scaleEffect(animateNews ? 1.0 : 0.8)
-                            .animation(.easeInOut(duration: 0.6).delay(Double(index) * 0.1), value: animateNews)
+                        Circle()
+                            .fill(Color.green.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(animateNews ? 1.0 : 0.7)
+                            .animation(.easeInOut(duration: 0.4).delay(Double(index) * 0.1), value: animateNews)
                     }
                 }
             }
@@ -2194,25 +2202,25 @@ struct PremiumNewsCard: View {
             }
             .padding(20)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        themeManager.isDarkMode ? 
+                            Color(red: 0.08, green: 0.08, blue: 0.08).opacity(0.98) : 
+                            Color(red: 0.98, green: 0.98, blue: 0.98).opacity(0.98)
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                LinearGradient(
-                                    colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.2)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
+                                Color.green.opacity(0.15),
+                                lineWidth: 0.5
                             )
                     )
             )
             .shadow(
-                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
-                radius: 8,
+                color: Color.black.opacity(0.08),
+                radius: 4,
                 x: 0,
-                y: 4
+                y: 2
             )
             .scaleEffect(isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
@@ -2246,20 +2254,20 @@ struct UniqueAISummarySection: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("AI INSIGHTS")
-                    .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.secondaryText : AppTheme.light.colors.secondaryText)
+                    .font(.system(size: 14, weight: .bold, design: .default))
+                    .foregroundColor(themeManager.isDarkMode ? AppTheme.dark.colors.primaryText : AppTheme.light.colors.primaryText)
                     .tracking(1.5)
                 
                 Spacer()
                 
-                // Custom AI indicator
-                HStack(spacing: 4) {
+                // Minimal indicator
+                HStack(spacing: 2) {
                     ForEach(0..<3) { index in
                         Circle()
-                            .fill(Color.purple)
+                            .fill(Color.purple.opacity(0.6))
                             .frame(width: 4, height: 4)
-                            .scaleEffect(animateSummary ? 1.0 : 0.8)
-                            .animation(.easeInOut(duration: 0.8).delay(Double(index) * 0.2), value: animateSummary)
+                            .scaleEffect(animateSummary ? 1.0 : 0.7)
+                            .animation(.easeInOut(duration: 0.4).delay(Double(index) * 0.1), value: animateSummary)
                     }
                 }
             }
@@ -2294,20 +2302,24 @@ struct UniqueAISummarySection: View {
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 12)
                             .fill(
                                 LinearGradient(
-                                    colors: [Color.purple, Color.blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                                    colors: [
+                                        Color.purple.opacity(0.9),
+                                        Color.indigo.opacity(0.8),
+                                        Color.blue.opacity(0.7)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
                             )
                     )
                     .shadow(
                         color: Color.purple.opacity(0.3),
-                        radius: animateButton ? 12 : 8,
+                        radius: 8,
                         x: 0,
-                        y: animateButton ? 6 : 4
+                        y: 4
                     )
                     .scaleEffect(animateButton ? 1.02 : 1.0)
                     .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: animateButton)
@@ -2315,25 +2327,25 @@ struct UniqueAISummarySection: View {
             }
             .padding(20)
             .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(themeManager.isDarkMode ? Color(hex: "1A1A1A") : Color.white)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        themeManager.isDarkMode ? 
+                            Color(red: 0.08, green: 0.08, blue: 0.08).opacity(0.98) : 
+                            Color(red: 0.98, green: 0.98, blue: 0.98).opacity(0.98)
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
+                        RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                LinearGradient(
-                                    colors: [Color.purple.opacity(0.3), Color.blue.opacity(0.3)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
+                                Color.purple.opacity(0.15),
+                                lineWidth: 0.5
                             )
                     )
             )
             .shadow(
-                color: themeManager.isDarkMode ? Color.black.opacity(0.2) : Color.black.opacity(0.05),
-                radius: 12,
+                color: Color.black.opacity(0.08),
+                radius: 4,
                 x: 0,
-                y: 6
+                y: 2
             )
         }
         .padding(.top, 20)
