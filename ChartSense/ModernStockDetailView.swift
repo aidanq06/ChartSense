@@ -60,6 +60,55 @@ struct ModernStockDetailView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @StateObject private var watchlistViewModel = WatchlistViewModel.shared
     @StateObject private var premiumManager = PremiumManager.shared
+    
+    // MARK: - Computed Properties
+    private var heartIconColor: Color {
+        if watchlistViewModel.isStockInWatchlist(stock.symbol) {
+            return .red
+        } else {
+            return themeManager.isDarkMode ? .white : .black
+        }
+    }
+    
+    private var usingOverride: Bool {
+        isScrubbing || overridePrice != nil || overrideChange != nil || overridePercent != nil
+    }
+    
+    private var livePrice: Double {
+        overridePrice ?? stock.currentPrice
+    }
+    
+    private var baseline: Double {
+        stock.currentPrice - stock.dailyChange
+    }
+    
+    private var changeValue: Double {
+        if usingOverride {
+            return overrideChange ?? (livePrice - baseline)
+        } else {
+            return stock.dailyChange
+        }
+    }
+    
+    private var percentValue: Double {
+        if usingOverride {
+            if let override = overridePercent {
+                return override
+            } else {
+                if baseline == 0 {
+                    return 0
+                } else {
+                    return (changeValue / baseline * 100.0)
+                }
+            }
+        } else {
+            return stock.dailyChangePercent
+        }
+    }
+    
+    private var isPositive: Bool {
+        changeValue >= 0
+    }
     @State private var selectedTab = 0
     @State private var showingAddToWatchlist = false
     @State private var currentStock: Stock
@@ -355,6 +404,55 @@ struct ModernStockDetailHeader: View {
     @StateObject private var watchlistViewModel = WatchlistViewModel.shared
     @StateObject private var premiumManager = PremiumManager.shared
     
+    // MARK: - Computed Properties
+    private var heartIconColor: Color {
+        if watchlistViewModel.isStockInWatchlist(stock.symbol) {
+            return .red
+        } else {
+            return themeManager.isDarkMode ? .white : .black
+        }
+    }
+    
+    private var usingOverride: Bool {
+        isScrubbing || overridePrice != nil || overrideChange != nil || overridePercent != nil
+    }
+    
+    private var livePrice: Double {
+        overridePrice ?? stock.currentPrice
+    }
+    
+    private var baseline: Double {
+        stock.currentPrice - stock.dailyChange
+    }
+    
+    private var changeValue: Double {
+        if usingOverride {
+            return overrideChange ?? (livePrice - baseline)
+        } else {
+            return stock.dailyChange
+        }
+    }
+    
+    private var percentValue: Double {
+        if usingOverride {
+            if let override = overridePercent {
+                return override
+            } else {
+                if baseline == 0 {
+                    return 0
+                } else {
+                    return (changeValue / baseline * 100.0)
+                }
+            }
+        } else {
+            return stock.dailyChangePercent
+        }
+    }
+    
+    private var isPositive: Bool {
+        changeValue >= 0
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Minimal Navigation Bar
@@ -383,7 +481,7 @@ struct ModernStockDetailHeader: View {
                 }) {
                     Image(systemName: watchlistViewModel.isStockInWatchlist(stock.symbol) ? "heart.fill" : "heart")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(watchlistViewModel.isStockInWatchlist(stock.symbol) ? .red : (themeManager.isDarkMode ? .white : .black))
+                        .foregroundColor(heartIconColor)
                         .frame(width: 32, height: 32)
                         .background(
                             Circle()
@@ -412,15 +510,6 @@ struct ModernStockDetailHeader: View {
                     
                     // Price and Change
                     VStack(alignment: .leading, spacing: 6) {
-                        let usingOverride = isScrubbing || overridePrice != nil || overrideChange != nil || overridePercent != nil
-                        let livePrice = overridePrice ?? stock.currentPrice
-                        let baseline = stock.currentPrice - stock.dailyChange
-                        let changeValue: Double = usingOverride ? (overrideChange ?? (livePrice - baseline)) : stock.dailyChange
-                        let percentValue: Double = usingOverride
-                            ? (overridePercent ?? (baseline == 0 ? 0 : (changeValue / baseline * 100.0)))
-                            : stock.dailyChangePercent
-                        let isPositive = changeValue >= 0
-                        
                         SmoothPriceTransition(
                             price: livePrice,
                             isAnimating: usingOverride
@@ -455,6 +544,26 @@ struct ModernTabBar: View {
     @Binding var selectedTab: Int
     @StateObject private var themeManager = ThemeManager.shared
     
+    // Computed properties to simplify complex expressions
+    private var selectedGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.2, green: 0.6, blue: 0.95),
+                Color(red: 0.4, green: 0.3, blue: 0.8)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+    
+    private var deselectedColor: Color {
+        themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5)
+    }
+    
+    private var backgroundColor: Color {
+        themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background
+    }
+    
     var body: some View {
         HStack(spacing: 0) {
             ForEach(0..<tabs.count, id: \.self) { index in
@@ -466,19 +575,15 @@ struct ModernTabBar: View {
                     VStack(spacing: 0) {
                         Text(tabs[index])
                             .font(.system(size: 15, weight: selectedTab == index ? .semibold : .regular, design: .default))
-                            .foregroundColor(
-                                selectedTab == index 
-                                ? (themeManager.isDarkMode ? .white : .black)
-                                : (themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
-                            )
+                            .foregroundStyle(selectedTab == index ? AnyShapeStyle(selectedGradient) : AnyShapeStyle(deselectedColor))
                             .padding(.vertical, 16)
                             .padding(.horizontal, 8)
                         
-                        // Minimal active indicator
+                        // Beautiful blue gradient active indicator
                         Rectangle()
-                            .fill(selectedTab == index ? Color.black : Color.clear)
-                            .frame(height: 1)
-                            .opacity(themeManager.isDarkMode ? 0.3 : 0.2)
+                            .fill(selectedTab == index ? AnyShapeStyle(selectedGradient) : AnyShapeStyle(Color.clear))
+                            .frame(height: 2)
+                            .opacity(selectedTab == index ? 1.0 : 0.0)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -486,7 +591,7 @@ struct ModernTabBar: View {
             }
         }
         .padding(.horizontal, 20)
-        .background(themeManager.isDarkMode ? AppTheme.dark.colors.background : AppTheme.light.colors.background)
+        .background(backgroundColor)
     }
 }
 

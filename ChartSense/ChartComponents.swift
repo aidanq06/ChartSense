@@ -336,10 +336,38 @@ struct UltraCleanChartTab: View {
     }
 }
 
-// MARK: - Range Selector (single-row, premium, uniform)
+// MARK: - Ultra-Minimal Range Selector
 struct RangeSelector: View {
     @Binding var range: ChartRange
     @StateObject private var themeManager = ThemeManager.shared
+    
+    // Computed properties to simplify complex expressions
+    private var selectedGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.2, green: 0.6, blue: 0.95),
+                Color(red: 0.4, green: 0.3, blue: 0.8)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+    
+    private var selectedBackgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.2, green: 0.6, blue: 0.95).opacity(0.15),
+                Color(red: 0.4, green: 0.3, blue: 0.8).opacity(0.15)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var deselectedColor: Color {
+        themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5)
+    }
+    
     var body: some View {
         HStack(spacing: 16) {
             ForEach(ChartRange.allCases, id: \.self) { r in
@@ -352,16 +380,12 @@ struct RangeSelector: View {
                 }) {
                     Text(r.display)
                         .font(.system(size: 14, weight: isSelected ? .semibold : .regular, design: .default))
-                        .foregroundColor(
-                            isSelected 
-                            ? (themeManager.isDarkMode ? .white : .black)
-                            : (themeManager.isDarkMode ? Color.white.opacity(0.5) : Color.black.opacity(0.5))
-                        )
+                        .foregroundStyle(isSelected ? AnyShapeStyle(selectedGradient) : AnyShapeStyle(deselectedColor))
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(isSelected ? Color.black.opacity(0.1) : Color.clear)
+                                .fill(isSelected ? AnyShapeStyle(selectedBackgroundGradient) : AnyShapeStyle(Color.clear))
                         )
                 }
                 .buttonStyle(.plain)
