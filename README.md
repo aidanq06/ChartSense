@@ -1,3 +1,5 @@
+# ChartSense
+
 ### AI-powered stock analysis app that helps you track markets, analyze sentiment, and make smarter investment decisions.
 
 <img width="300" height="300" alt="ChartSense Pic" src="https://github.com/user-attachments/assets/bc3fb141-fda8-4a0a-a38a-2b136c0c6fda" />
@@ -26,13 +28,13 @@
 
 
 <img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 18 56 18" src="https://github.com/user-attachments/assets/59b9aac3-979c-4084-8268-46a915393faa" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 18 59 06" src="https://github.com/user-attachments/assets/fb733fd9-0067-4048-ad4a-5ac935ca1923" />
 
 **Login Options:**
 - Email and password
 - Apple Sign-In
 - Google Sign-In
 
-<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 18 56 18" src="https://github.com/user-attachments/assets/7b3bf2a3-5a50-46fe-aa4f-9fd66129a416" />
 
 
 ---
@@ -117,11 +119,10 @@ Track your favorite stocks in one place.
 
 Comprehensive analysis for any stock.
 
-<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 14" src="https://github.com/user-attachments/assets/08714829-90a5-4298-b35a-f8d0e07224e2" />
-<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 12" src="https://github.com/user-attachments/assets/a7989d39-a1d4-4df8-9ac5-641e99817b84" />
-<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 11" src="https://github.com/user-attachments/assets/20b7d51d-aac4-46a2-8915-3bf83414bb48" />
-<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 07" src="https://github.com/user-attachments/assets/6f8cc872-4ad5-4423-a4ad-c90239d46131" />
-
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 07" src="https://github.com/user-attachments/assets/6f8cc872-4ad5-4423-a4ad-c90239d46131" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 11" src="https://github.com/user-attachments/assets/20b7d51d-aac4-46a2-8915-3bf83414bb48" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 12" src="https://github.com/user-attachments/assets/a7989d39-a1d4-4df8-9ac5-641e99817b84" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 14" src="https://github.com/user-attachments/assets/08714829-90a5-4298-b35a-f8d0e07224e2" />
 
 **Price & Performance:**
 - Real-time price updates
@@ -160,13 +161,9 @@ Comprehensive analysis for any stock.
 
 Ask questions, get instant market intelligence.
 
-[Screenshot: AI Chat interface]
-
-**Example Questions:**
-- "What's the sentiment on Tesla?"
-- "Compare Apple and Microsoft"
-- "Explain P/E ratios"
-- "What are the best sectors right now?"
+<img width="200" height="500" alt="simulator_screenshot_A787EFF0-BFBB-4825-A8A9-9A735B26E9A6" src="https://github.com/user-attachments/assets/1e190e50-aa25-4701-833a-70070ad400b7" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 23 37" src="https://github.com/user-attachments/assets/3b51119a-64cb-47b8-b2e4-e0a7d6d5877c" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 23 30" src="https://github.com/user-attachments/assets/12044b4d-f263-4488-9fa7-86c8f7a95542" />
 
 **AI Provides:**
 - Current market data
@@ -184,29 +181,12 @@ Ask questions, get instant market intelligence.
 
 ---
 
-## Alerts
-
-Stay informed with intelligent notifications.
-
-[Screenshot: Push notification example]
-
-**Alert Types:**
-- Price targets (above/below thresholds)
-- Sentiment changes
-- Breaking news
-- Market events
-- Earnings announcements
-
-**Delivery Methods:**
-- Push notifications
-- In-app banners
-- Email digests (Premium)
-
----
-
 ## Premium Features
 
-[Screenshot: Premium upgrade screen]
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 25 13" src="https://github.com/user-attachments/assets/b1ea9741-3999-4c3b-aa7d-cf3d49a80e92" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 25 17" src="https://github.com/user-attachments/assets/b899ecb7-ee59-47c5-a80e-56520f079542" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 25 20" src="https://github.com/user-attachments/assets/79a6a8bb-774b-4e06-bcfb-7c72c3228ace" />
+
 
 **What You Get:**
 - Unlimited watchlist (vs. 1 stock free)
@@ -220,7 +200,10 @@ Stay informed with intelligent notifications.
 
 ## Settings
 
-[Screenshot: Settings screen]
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 26 14" src="https://github.com/user-attachments/assets/61939a50-b50b-4e7c-b7b0-5bd0b454fc18" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 26 12" src="https://github.com/user-attachments/assets/0c7486b7-3742-4d49-a1b5-0043d2884868" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 26 09" src="https://github.com/user-attachments/assets/85dfc50d-3565-4ef2-9173-162b920c3deb" />
+
 
 **Account:**
 - Profile management
