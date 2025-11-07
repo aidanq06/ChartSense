@@ -1,103 +1,265 @@
-# ChartSense
+### AI-powered stock analysis app that helps you track markets, analyze sentiment, and make smarter investment decisions.
 
-ChartSense is a mobile-first investment companion that distills market sentiment into actionable insight. The iOS application aggregates trusted financial news and social media commentary, applies natural language processing to surface bullish or bearish trends, and presents the results in a format tailored for everyday investors.
+<img width="300" height="300" alt="ChartSense Pic" src="https://github.com/user-attachments/assets/bc3fb141-fda8-4a0a-a38a-2b136c0c6fda" />
 
-## Key Capabilities
 
-- **Sentiment intelligence** – Consolidates news headlines, long-form articles, and social streams to score tickers by positive, neutral, or negative momentum.
-- **Digestible market views** – Highlights the metrics that matter through curated dashboards, watchlists, and alerting flows designed for clarity.
-- **AI-powered assistance** – Provides conversational guidance to help investors interpret market shifts and explore new ideas.
-- **Seamless premium experience** – Supports subscription management and gated content to differentiate free and premium feature sets.
+---
 
-## Screenshots
+## Quick Overview
 
-> Replace the placeholders below with final assets before release.
+**What ChartSense Does:**
+- Real-time stock prices and market data
+- AI sentiment analysis (bullish/bearish ratings)
+- Personalized watchlist tracking
+- Conversational AI assistant for market questions
+- Smart alerts for price changes and news
 
-- ![Mobile dashboard placeholder](docs/images/dashboard-placeholder.png)
-- ![Sentiment detail placeholder](docs/images/sentiment-placeholder.png)
-- ![AI assistant placeholder](docs/images/assistant-placeholder.png)
+**Who It's For:**
+- Investors tracking their portfolio
+- Traders monitoring market sentiment
+- Beginners learning about stocks
+- Anyone wanting AI-powered market insights
 
-## Architecture Overview
+---
 
-ChartSense couples a modern SwiftUI client with a cloud-ready backend to ensure real-time insights and reliable delivery:
+## Onboarding
 
-- **iOS application** – Built with SwiftUI, Combine, and async/await patterns for responsive interfaces, live charting, and smooth navigation.
-- **Supabase integration** – Manages authentication, profiles, and ancillary data storage to accelerate iteration.
-- **Custom API layer** – A TypeScript Fastify service backed by PostgreSQL centralizes ticker, sentiment, and user data. Redis is available for low-latency caching and rate limiting.
-- **Ingestion and AI services** – Scheduled workers collect market data, refresh pricing, and run sentiment models that power the in-app experience.
 
-## Technology Stack
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 18 56 18" src="https://github.com/user-attachments/assets/59b9aac3-979c-4084-8268-46a915393faa" />
 
-| Layer | Technologies |
-| --- | --- |
-| Mobile client | SwiftUI, Combine, WidgetKit, StoreKit |
-| Backend services | Fastify (TypeScript), Node.js, Supabase Functions |
-| Data & infrastructure | PostgreSQL, Redis, Docker Compose (local), Supabase |
-| Intelligence | Python-based NLP pipelines, OpenAI integrations |
-| Tooling | Xcode, npm, pnpm, Supabase CLI |
+**Login Options:**
+- Email and password
+- Apple Sign-In
+- Google Sign-In
+
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 18 56 18" src="https://github.com/user-attachments/assets/7b3bf2a3-5a50-46fe-aa4f-9fd66129a416" />
+
+
+---
+
+## Home Screen
+
+Your personalized dashboard with four key widgets:
+
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 00 24" src="https://github.com/user-attachments/assets/2ec72f72-2152-4b99-a09c-ca76c129975f" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 02 02" src="https://github.com/user-attachments/assets/8cff7ac4-3001-4e6e-927d-783e56d7cbad" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 02 06" src="https://github.com/user-attachments/assets/41b2201c-8ab8-460f-b211-233ac1b263be" />
+
+**Watchlist Widget**
+- Display up to 3 tickers on the home page
+- Displays sentiment score, current ticker price, Social, News, and Technical values, and an ai powered summary.
+
+**News Widget**
+- Curated headlines from Bloomberg, Reuters, CNBC
+- Categorized by type (Earnings, Technology, Economic)
+- Sentiment indicators
+
+**Watchlist Widget**
+- Tracked stocks with current prices
+- Daily change percentages
+- AI sentiment scores (Bullish/Neutral/Bearish)
+- Mini price charts
+
+**AI Insights Widget**
+- Daily market insights
+- Suggested questions to explore
+
+---
+
+## Navigation
+
+Five main sections accessible via bottom tab bar:
+
+<img width="317" height="52" alt="image" src="https://github.com/user-attachments/assets/1ed4ed20-edcf-4e14-8b6d-ec8c46aa3b60" />
+
+
+1. **Home** - Dashboard with widgets
+2. **Discover** - Search all stocks
+3. **AI** - Chat with financial assistant
+4. **Watchlist** - Your tracked stocks
+5. **Settings** - App preferences
+
+---
+
+## Watchlist
+
+Track your favorite stocks in one place.
+
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 04 05" src="https://github.com/user-attachments/assets/3a081f6f-55e3-49bf-96d7-8e81efa2c341" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 04 13" src="https://github.com/user-attachments/assets/bbc72f9e-7b02-40ec-bace-c877a1153eba" />
+<img width="200" height="500" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 04 15" src="https://github.com/user-attachments/assets/fc867ec6-f8de-414a-89c1-1405e0dce140" />
+
+**Adding Stocks:**
+- Tap "+" button
+- Search by symbol or company name
+- See current price and daily performance
+- Add to watchlist (Free: 1 stock, Premium: unlimited)
+
+**Stock Cards Show:**
+- Symbol and company name
+- Current price with color-coded change arrows
+- Daily percentage change
+- AI sentiment indicator
+- Quick actions (alerts, remove)
+
+**Alerts Configuration:**
+- Price alerts (above/below targets)
+- Sentiment change alerts
+- News alerts (earnings, analyst changes, M&A)
+- Delivery options (push, in-app, email)
+
+[Screenshot: Alerts setup screen]
+
+<img width="200" height="500" alt="simulator_screenshot_8127BFD7-ADBA-4C71-8C16-F14C5D4A1C80" src="https://github.com/user-attachments/assets/24057994-d69c-491f-8108-40f0927af06e" />
+
+
+## Stock Detail View
+
+Comprehensive analysis for any stock.
+
+<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 14" src="https://github.com/user-attachments/assets/08714829-90a5-4298-b35a-f8d0e07224e2" />
+<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 12" src="https://github.com/user-attachments/assets/a7989d39-a1d4-4df8-9ac5-641e99817b84" />
+<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 11" src="https://github.com/user-attachments/assets/20b7d51d-aac4-46a2-8915-3bf83414bb48" />
+<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2025-11-06 at 19 08 07" src="https://github.com/user-attachments/assets/6f8cc872-4ad5-4423-a4ad-c90239d46131" />
+
+
+**Price & Performance:**
+- Real-time price updates
+- Interactive charts (daily, weekly, monthly)
+- 52-week high/low
+- Trading volume and market cap
+
+**AI Sentiment Analysis:**
+- Overall rating (Strongly Bullish to Highly Negative)
+- News sentiment breakdown
+- Social media sentiment
+- Analyst consensus
+- Technical indicators
+
+**News Feed:**
+- Categorized articles (Earnings, Product, Analyst, Regulatory, Macro, Competitor)
+- Sentiment impact scores
+- Relevance ratings
+
+**Analyst Consensus:**
+- Buy/Hold/Sell distribution
+- Average price target
+- Recent rating changes
+
+**Market Context:**
+- Sector performance
+- Economic indicators
+- Upcoming events (earnings, launches)
+- Community sentiment
+
+[Screenshot: News feed section]
+
+---
+
+## AI Chat
+
+Ask questions, get instant market intelligence.
+
+[Screenshot: AI Chat interface]
+
+**Example Questions:**
+- "What's the sentiment on Tesla?"
+- "Compare Apple and Microsoft"
+- "Explain P/E ratios"
+- "What are the best sectors right now?"
+
+**AI Provides:**
+- Current market data
+- Stock analysis
+- Sentiment breakdowns
+- Technical observations
+- Portfolio recommendations
+- Educational explanations
+
+**Features:**
+- Suggested starter questions
+- Conversation history
+- Context-aware responses
+- Typing animations
+
+---
+
+## Alerts
+
+Stay informed with intelligent notifications.
+
+[Screenshot: Push notification example]
+
+**Alert Types:**
+- Price targets (above/below thresholds)
+- Sentiment changes
+- Breaking news
+- Market events
+- Earnings announcements
+
+**Delivery Methods:**
+- Push notifications
+- In-app banners
+- Email digests (Premium)
+
+---
+
+## Premium Features
+
+[Screenshot: Premium upgrade screen]
+
+**What You Get:**
+- Unlimited watchlist (vs. 1 stock free)
+- Advanced AI analysis
+- Priority alerts
+- Ad-free experience
+- Data export
+- Priority support
+
+---
+
+## Settings
+
+[Screenshot: Settings screen]
+
+**Account:**
+- Profile management
+- Connected accounts
+- Subscription status
+
+**Notifications:**
+- Delivery methods
+- Alert categories
+- Quiet hours
+
+**Display:**
+- Light/dark mode
+- Accessibility options
+
+**Privacy:**
+- Data export
+- Account deletion
+- Privacy policy
+
+---
+
+## Privacy & Security
+
+- End-to-end encryption
+- Secure authentication
+- No data selling
+- GDPR/CCPA compliant
+- Biometric login support
+
+---
 
 ## Getting Started
 
-### Prerequisites
+1. Download from App Store
+2. Sign in (Apple/Google/Email)
+3. Add stocks to watchlist
+4. Explore home screen widgets
+5. Ask AI your first question
+6. Set up alerts
 
-- Xcode 15 or later with the iOS 17 SDK
-- Node.js 20+ and npm for backend services
-- Docker Desktop for local databases and caching layers
-- Supabase project credentials (URL, anon key, service role key)
-
-### Mobile App Setup
-
-1. Copy `ChartSense/Config.plist.example` to `ChartSense/Config.plist` and populate the API, Supabase, and subscription keys.
-2. Open `ChartSense.xcodeproj` in Xcode.
-3. Select the `ChartSense` scheme and run on a simulator or device.
-
-### Backend Setup (Optional for Local Testing)
-
-1. `cd backend` and run `docker compose up -d` to provision PostgreSQL and Redis.
-2. Apply database migrations: `psql postgres://chartsense:chartsense@localhost:5432/chartsense -f sql/0001_init.sql`.
-3. Duplicate `env.example` to `.env`, then add API secrets and provider tokens.
-4. In separate terminals, install dependencies and start the services:
-   - `cd backend/api && npm install && npm run dev`
-   - `cd backend/worker && npm install && npm run dev`
-
-### Supabase Project Sync
-
-1. Install the Supabase CLI and authenticate with your project.
-2. Run `supabase db push` to align local schema changes.
-3. Use `supabase functions deploy` to ship edge functions as needed.
-
-## Repository Structure
-
-```
-ChartSense/
-├─ ChartSense/                # SwiftUI application source
-├─ backend/                   # Fastify API, worker services, database migrations
-├─ database/                  # Supabase policies, seeds, and SQL utilities
-├─ docs/                      # Operational guides and troubleshooting references
-└─ supabase/                  # Local Supabase configuration and migrations
-```
-
-## Quality and Compliance
-
-- **Security first** – Secrets are stored outside source control, and role-based policies govern data access.
-- **Performance monitoring** – API endpoints and workers expose structured logs for observability.
-- **App Store readiness** – The project follows Apple Human Interface Guidelines and supports subscription compliance through StoreKit.
-
-## Roadmap Highlights
-
-- Expand coverage to global equity markets and thematic indexes.
-- Deepen AI explanations with scenario analysis and natural language summaries.
-- Introduce collaborative watchlists and shared sentiment boards.
-
-## Contributing
-
-1. Fork the repository and create a feature branch.
-2. Run formatting and linting scripts before submitting changes.
-3. Open a pull request describing the problem, proposed solution, and testing strategy.
-
-The team reviews contributions for clarity, maintainability, and alignment with our product vision.
-
-## Licensing
-
-ChartSense is a proprietary project. Please contact the maintainers for licensing inquiries.
-
+*ChartSense - Making market intelligence accessible to everyone*
